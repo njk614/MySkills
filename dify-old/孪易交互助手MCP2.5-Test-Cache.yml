@@ -1,0 +1,1308 @@
+app:
+  description: ''
+  icon: 🤖
+  icon_background: '#FFEAD5'
+  mode: advanced-chat
+  name: 孪易交互助手MCP2.5-Test-Cache
+  use_icon_as_answer_icon: false
+dependencies: []
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables:
+  - description: 历史用户问题信息
+    id: 3e463aea-e0f7-434a-a95f-74e5b8d46d37
+    name: historyUser
+    selector:
+    - conversation
+    - historyUser
+    value: []
+    value_type: array[object]
+  - description: MCP调用历史接口信息
+    id: 3f44b5ee-f055-4b6c-8edb-2e568e1cf581
+    name: historyInter
+    selector:
+    - conversation
+    - historyInter
+    value: []
+    value_type: array[object]
+  - description: 场景token用于判断
+    id: ad238b9d-b897-47e8-a182-594021b0fbf0
+    name: tokenJudge
+    selector:
+    - conversation
+    - tokenJudge
+    value: ''
+    value_type: string
+  - description: 场景信息
+    id: bc57642d-6e75-4d65-a354-dee6b5e39285
+    name: sceneInfo
+    selector:
+    - conversation
+    - sceneInfo
+    value: ''
+    value_type: string
+  environment_variables:
+  - description: 孪易服务地址
+    id: 032d1844-acf7-41f7-be85-493b31e07c37
+    name: TwinEasyServerUrl
+    selector:
+    - env
+    - TwinEasyServerUrl
+    value: http://test.twinioc.net/api/editor
+    value_type: string
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .JPG
+      - .JPEG
+      - .PNG
+      - .GIF
+      - .WEBP
+      - .SVG
+      allowed_file_types:
+      - image
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: answer
+      id: 1762510972590-source-1762575838241-target
+      selected: false
+      source: '1762510972590'
+      sourceHandle: source
+      target: '1762575838241'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: answer
+        targetType: answer
+      id: 1762575838241-source-1764644924416-target
+      selected: false
+      source: '1762575838241'
+      sourceHandle: source
+      target: '1764644924416'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: code
+        targetType: http-request
+      id: 1762510972590-source-1762413557040-target
+      selected: false
+      source: '1762510972590'
+      sourceHandle: source
+      target: '1762413557040'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: answer
+      id: 1759562415940-source-1764644882648-target
+      selected: false
+      source: '1759562415940'
+      sourceHandle: source
+      target: '1764644882648'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: if-else
+      id: 1759562415940-source-1769052731370-target
+      selected: false
+      source: '1759562415940'
+      sourceHandle: source
+      target: '1769052731370'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: tool
+      id: 1769052731370-false-1769052144864-target
+      selected: false
+      source: '1769052731370'
+      sourceHandle: 'false'
+      target: '1769052144864'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: code
+        targetType: assigner
+      id: 1769053789018-source-1769053034760-target
+      selected: false
+      source: '1769053789018'
+      sourceHandle: source
+      target: '1769053034760'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
+        targetType: code
+      id: 1769052144864-source-1769053789018-target
+      source: '1769052144864'
+      sourceHandle: source
+      target: '1769053789018'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: assigner
+        targetType: agent
+      id: 1769053034760-source-1769061528932-target
+      source: '1769053034760'
+      sourceHandle: source
+      target: '1769061528932'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: if-else
+        targetType: agent
+      id: 1769052731370-true-1769061528932-target
+      source: '1769052731370'
+      sourceHandle: 'true'
+      target: '1769061528932'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: agent
+        targetType: code
+      id: 1769061528932-source-1762510972590-target
+      source: '1769061528932'
+      sourceHandle: source
+      target: '1762510972590'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: agent
+        targetType: code
+      id: 1769061528932-source-1769074783915-target
+      source: '1769061528932'
+      sourceHandle: source
+      target: '1769074783915'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: code
+        targetType: assigner
+      id: 1769074783915-source-1769077659992-target
+      source: '1769074783915'
+      sourceHandle: source
+      target: '1769077659992'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: ''
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - default: ''
+          hint: ''
+          label: token
+          max_length: 48
+          options: []
+          placeholder: ''
+          required: true
+          type: text-input
+          variable: token
+      height: 109
+      id: '1759562415940'
+      position:
+        x: -1727.4394195973573
+        y: 2223.4739204549633
+      positionAbsolute:
+        x: -1727.4394195973573
+        y: 2223.4739204549633
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - id: key-value-5979
+            key: ''
+            type: text
+            value: '{
+
+              “token”：“{{#1759562415940.token#}}”，
+
+              “jsonData”：“{{#1762510972590.resultorder#}}$&{{#sys.query#}}$&{{#1762510972590.result#}}”
+
+              }'
+          type: json
+        headers: 'Content-Type:application/json
+
+          Accept:text/plain'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: '发动孪易指令HTTP请求 '
+        type: http-request
+        url: '{{#env.TwinEasyServerUrl#}}/v1/location/SendInstruction'
+        variables: []
+      height: 142
+      id: '1762413557040'
+      position:
+        x: 794.5394745214749
+        y: 2536.402563100893
+      positionAbsolute:
+        x: 794.5394745214749
+        y: 2536.402563100893
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def jiequorder(info: str) -> str:\n    \"\"\"\n    从响应文本中提取最后一个方括号中的内容\n\
+          \    只处理实际输出的部分，忽略思考部分中的示例\n    \"\"\"\n    import re\n    \n    # 方法1：查找最后一个完整的方括号对\n\
+          \    # 从后往前查找最后一个 ']'\n    last_close_idx = info.rfind(']')\n    if last_close_idx\
+          \ == -1:\n        return \"\"\n    \n    # 从最后一个 ']' 往前查找对应的 '['\n    last_open_idx\
+          \ = info.rfind('[', 0, last_close_idx)\n    if last_open_idx == -1:\n  \
+          \      return \"\"\n    \n    # 提取最后一个方括号中的内容\n    bracket_content = info[last_open_idx\
+          \ + 1:last_close_idx].strip()\n    \n    if not bracket_content:\n     \
+          \   return \"\"\n    \n    # 将方括号内的内容按&分割，然后用$连接所有命令\n    commands = bracket_content.split('&')\n\
+          \    # 过滤空命令并去除空格\n    valid_commands = [cmd.strip() for cmd in commands\
+          \ if cmd.strip()]\n    \n    # 将所有命令用$连接\n    result = \"$\".join(valid_commands)\n\
+          \    return result\n\ndef extract_info(cleaned_arg: str) -> str:\n    \"\
+          \"\"\n    从字符串中提取内容\n    格式如：B01：对象聚焦：XXX, A09：场景复位\n    返回第一个中文冒号之后的所有内容\n\
+          \    \"\"\"\n    # 使用 split 方法，限制只分割一次\n    parts = cleaned_arg.split(\"\
+          ：\", 1)\n    \n    # 如果成功分割（即包含冒号），返回第二部分并去除首尾空格\n    if len(parts) > 1:\n\
+          \        return parts[1].strip()\n    else:\n        # 如果没有冒号，返回原字符串或空字符串，根据你的需求决定\n\
+          \        # 这里假设如果没有冒号，可能格式错误，返回空字符串\n        return cleaned_arg.strip()\
+          \ if cleaned_arg else \"\"\n\ndef process_single_command(cleaned_arg: str)\
+          \ -> str:\n    \"\"\"\n    处理单个命令并返回结果\n    \"\"\"\n    # 初始化result变量\n\
+          \    result = \"\"\n    \n    # 检查是否以D开头 - 特殊处理\n    if cleaned_arg.startswith('D'):\n\
+          \        # 对于D开头的命令，直接从第四个字符开始截取（索引3），跳过\"D01：\"部分\n        if \"：\" in\
+          \ cleaned_arg:\n            # 获取第一个冒号之后的所有内容\n            content = cleaned_arg.split(\"\
+          ：\", 1)[1].strip()\n            # 按照你的要求格式化输出\n            return f\"为您查找到相关内容如下：{content}\"\
+          \n        else:\n            # 如果没有冒号，直接截取第4个字符之后的内容\n            if len(cleaned_arg)\
+          \ >= 4:\n                return f\"为您查找到相关内容如下：{cleaned_arg[3:]}\"\n   \
+          \         else:\n                return \"执行失败，字符串长度不足\"\n    \n    # 检查是否以A开头\
+          \ 层级\n    if cleaned_arg.startswith('A01'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A02'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A03'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A04'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A05'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A06'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A07'):\n        result = extract_info(cleaned_arg)\n\
+          \    \n    # 检查是否以A开头 视野\n    elif cleaned_arg.startswith('A08'):\n    \
+          \    result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A09'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A10'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A11'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A12'):\n\
+          \        result = extract_info(cleaned_arg)\n        \n    # 检查是否以A开头 时间轴\n\
+          \    elif cleaned_arg.startswith('A13'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A14'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A15'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A16'):\n        result = extract_info(cleaned_arg)\n\
+          \        \n    # 检查是否以A开头 图层\n    elif cleaned_arg.startswith('A17'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A18'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A19'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A20'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A21'):\n\
+          \        result = extract_info(cleaned_arg)\n        \n    # 检查是否以A开头 图表\n\
+          \    elif cleaned_arg.startswith('A22'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A23'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A24'):\n        result = extract_info(cleaned_arg)\n\
+          \        \n    # 检查是否以A开头 环境\n    elif cleaned_arg.startswith('A25'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A26'):\n\
+          \        result = \"环境控制\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A27'):\n\
+          \        result = \"环境控制\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A28'):\n\
+          \        result = \"环境控制\" + extract_info(cleaned_arg)\n        \n    #\
+          \ 检查是否以A开头 演示汇报\n    elif cleaned_arg.startswith('A29'):\n        result\
+          \ = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A30'):\n\
+          \        result = \"演示汇报\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A31'):\n\
+          \        result = \"演示汇报\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A32'):\n\
+          \        result = \"演示汇报\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A33'):\n\
+          \        result = \"演示汇报\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A34'):\n\
+          \        result = \"演示汇报\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('A35'):\n\
+          \        result = \"演示汇报\" + extract_info(cleaned_arg)\n\t\n\t# 检查是否以A开头\
+          \ 告警\n    elif cleaned_arg.startswith('A36'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A37'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A38'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('A39'):\n        result = extract_info(cleaned_arg)\n\
+          \    \n    # 检查是否以B开头\n    elif cleaned_arg.startswith('B01'):\n       \
+          \ result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B02'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B03'):\n\
+          \        result = \"对象\" + extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B04'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B05'):\n\
+          \        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B06'):\
+          \ \n        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B07'):\
+          \ \n        result = extract_info(cleaned_arg)\n    elif cleaned_arg.startswith('B08'):\
+          \ \n        result = extract_info(cleaned_arg)\n    \n    # 检查是否以C开头\n \
+          \   elif cleaned_arg.startswith('C01'):\n        result = extract_info(cleaned_arg)\n\
+          \    elif cleaned_arg.startswith('C02'):\n        result = extract_info(cleaned_arg)\n\
+          \    else:\n        result = \"执行失败，失败原因：\" + cleaned_arg\n    \n    return\
+          \ result\n\ndef main(arg1: str) -> dict:\n    resultorder = jiequorder(arg1)\
+          \  # 现在返回的是正确分割的命令字符串\n    \n    # 去除前后空格并转换为大写\n    cleaned_arg = resultorder.strip().upper()\n\
+          \    \n    # 按$分割命令\n    commands = cleaned_arg.split('$')\n    \n    #\
+          \ 处理每个命令并检查是否有执行失败\n    has_failure = False\n    failure_result = \"\"\n\
+          \    results = []\n    \n    for i, command in enumerate(commands, 1):\n\
+          \        command = command.strip()  # 去除每个命令的前后空格\n        if command: \
+          \ # 确保命令不为空\n            # 处理单个命令\n            content = process_single_command(command)\n\
+          \            \n            # 检查是否包含执行失败\n            if \"执行失败\" in content:\n\
+          \                has_failure = True\n                failure_result = content\n\
+          \                break  # 一旦有执行失败，就停止处理后续命令\n            \n            #\
+          \ 否则正常添加到结果列表\n            formatted_result = f\"{i}、{content}\"\n     \
+          \       results.append(formatted_result)\n    \n    # 构建最终结果字符串\n    if\
+          \ has_failure:\n        # 如果有执行失败，直接返回失败结果\n        final_result = failure_result\n\
+          \    elif results:\n        # 检查是否为D开头的命令\n        if len(commands) > 0\
+          \ and commands[0].strip().startswith('D'):\n            # 对于D开头的命令，直接返回内容（不加序号和前缀）\n\
+          \            # 注意：process_single_command函数已经为D开头命令添加了前缀\n            final_result\
+          \ = results[0].split(\"、\", 1)[1] if \"、\" in results[0] else results[0]\n\
+          \        else:\n            # 其他命令使用规划指令格式\n            final_result = \"\
+          根据最优策略，已经为您规划如下执行计划：\\\\n\" + \"\\\\n\".join(results)\n    else:\n     \
+          \   # 如果没有有效指令\n        final_result = \"未识别出有效指令，请先查询场景有哪些内容再查找\"\n   \
+          \ \n    return {\n        \"result\": final_result,\n        \"resultorder\"\
+          : resultorder,\n    }"
+        code_language: python3
+        outputs:
+          result:
+            children: null
+            type: string
+          resultorder:
+            children: null
+            type: string
+        selected: false
+        title: 代码执行
+        type: code
+        variables:
+        - value_selector:
+          - '1769061528932'
+          - text
+          value_type: string
+          variable: arg1
+      height: 52
+      id: '1762510972590'
+      position:
+        x: 332.413905194653
+        y: 2326.0570182725687
+      positionAbsolute:
+        x: 332.413905194653
+        y: 2326.0570182725687
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: "{\n  \"response\": \"{{#1762510972590.result#}}\"\n}THISSECTIONEND\n"
+        selected: false
+        title: 直接回复2
+        type: answer
+        variables: []
+      height: 135
+      id: '1762575838241'
+      position:
+        x: 794.5394745214749
+        y: 2326.0570182725687
+      positionAbsolute:
+        x: 794.5394745214749
+        y: 2326.0570182725687
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: "{\n  \"response\": \"您好我是孪易交互助手，正在执行任务，请稍等~\"\n}THISSECTIONEND"
+        selected: false
+        title: 直接回复1
+        type: answer
+        variables: []
+      height: 132
+      id: '1764644882648'
+      position:
+        x: -1363.5531062980117
+        y: 2165.1630368648953
+      positionAbsolute:
+        x: -1363.5531062980117
+        y: 2165.1630368648953
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: AGENTEND
+        selected: false
+        title: 直接回复AGENTEND
+        type: answer
+        variables: []
+      height: 100
+      id: '1764644924416'
+      position:
+        x: 1094.2420778114806
+        y: 2326.0570182725687
+      positionAbsolute:
+        x: 1094.2420778114806
+        y: 2326.0570182725687
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: SignalR连接时返回的6位UniqueId
+            ja_JP: SignalR连接时返回的6位UniqueId
+            pt_BR: SignalR连接时返回的6位UniqueId
+            zh_Hans: SignalR连接时返回的6位UniqueId
+          label:
+            en_US: token
+            ja_JP: token
+            pt_BR: token
+            zh_Hans: token
+          llm_description: SignalR连接时返回的6位UniqueId
+          max: null
+          min: null
+          name: token
+          options: []
+          placeholder: null
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        params:
+          token: ''
+        plugin_id: ''
+        plugin_unique_identifier: ''
+        provider_icon:
+          background: '#FFEAD5'
+          content: 🌏
+        provider_id: twinioc-mcp-2-5
+        provider_name: 孪易MCP2.5_Test短码
+        provider_type: mcp
+        selected: false
+        title: get_scene_info
+        tool_configurations: {}
+        tool_description: '获取当前数字孪生场景的完整配置信息，包括层级结构、业务主题、演示汇报、图层、孪生体类别以及时间轴配置等核心信息。
+
+
+          功能说明：查询并返回场景的层级名称列表、业务主题列表、演示汇报列表、图层名称列表、孪生体类别列表，以及时间轴的开始和结束时间（仅在回放模式下有值）。
+
+
+          输入参数：
+
+          - token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+          输出说明：
+
+          - LevelNames: 层级名称列表，如''1F'', ''2F'', ''3F''
+
+          - ThemeNames: 业务主题列表，如''安防监控'', ''能源管理''
+
+          - DemoReportNames: 演示汇报名称列表，如''月度汇报'', ''年度总结''
+
+          - LayerNames: 图层名称列表，如''建筑图层'', ''设备图层'', ''管线图层''
+
+          - TwinCategoryNames: 孪生体类别列表，如''设备'', ''人员'', ''车辆''
+
+          - StartTime: 时间轴开始时间，回放模式下有值，格式yyyy-MM-dd HH:mm:ss
+
+          - EndTime: 时间轴结束时间，回放模式下有值，格式yyyy-MM-dd HH:mm:ss
+
+
+          注意事项：token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+        tool_label: get_scene_info
+        tool_name: get_scene_info
+        tool_node_version: '2'
+        tool_parameters:
+          token:
+            type: mixed
+            value: '{{#1759562415940.token#}}'
+        type: tool
+      height: 84
+      id: '1769052144864'
+      position:
+        x: -1003.0006910548645
+        y: 2625.1246407955746
+      positionAbsolute:
+        x: -1003.0006910548645
+        y: 2625.1246407955746
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        cases:
+        - case_id: 'true'
+          conditions:
+          - comparison_operator: not empty
+            id: 025998ce-2999-423a-b576-480db3c8e7a9
+            value: ''
+            varType: string
+            variable_selector:
+            - conversation
+            - sceneInfo
+          - comparison_operator: is
+            id: 253f5388-4005-4ee1-ad87-8a724ca0ba4c
+            value: '{{#conversation.tokenJudge#}}'
+            varType: string
+            variable_selector:
+            - '1759562415940'
+            - token
+          id: 'true'
+          logical_operator: and
+        selected: false
+        title: 条件分支
+        type: if-else
+      height: 150
+      id: '1769052731370'
+      position:
+        x: -1363.5531062980117
+        y: 2381.7852253006427
+      positionAbsolute:
+        x: -1363.5531062980117
+        y: 2381.7852253006427
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        items:
+        - input_type: variable
+          operation: over-write
+          value:
+          - '1769053789018'
+          - result
+          variable_selector:
+          - conversation
+          - sceneInfo
+          write_mode: over-write
+        - input_type: variable
+          operation: over-write
+          value:
+          - '1759562415940'
+          - token
+          variable_selector:
+          - conversation
+          - tokenJudge
+          write_mode: over-write
+        - input_type: variable
+          operation: clear
+          value: ''
+          variable_selector:
+          - conversation
+          - historyUser
+          write_mode: over-write
+        - input_type: variable
+          operation: clear
+          value: ''
+          variable_selector:
+          - conversation
+          - historyInter
+          write_mode: over-write
+        selected: false
+        title: 变量赋值
+        type: assigner
+        version: '2'
+      height: 162
+      id: '1769053034760'
+      position:
+        x: -380.1800974876929
+        y: 2625.1246407955746
+      positionAbsolute:
+        x: -380.1800974876929
+        y: 2625.1246407955746
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "\ndef main(arg1: str):\n    import json\n    \n     # 如果是字符串，先解析\n\
+          \    if isinstance(arg1, str):\n        try:\n            data = json.loads(arg1)\n\
+          \            result = json.dumps(data, ensure_ascii=False, indent=2)\n \
+          \       except:\n            result = arg1  # 如果不是JSON，返回原字符串\n    else:\n\
+          \        # 如果不是字符串，直接序列化\n        result = json.dumps(arg1, ensure_ascii=False,\
+          \ indent=2)\n    \n    return {\n        \"result\": result,\n    }\n"
+        code_language: python3
+        outputs:
+          result:
+            children: null
+            type: string
+        selected: false
+        title: 代码执行赋值
+        type: code
+        variables:
+        - value_selector:
+          - '1769052144864'
+          - json
+          value_type: array[object]
+          variable: arg1
+      height: 52
+      id: '1769053789018'
+      position:
+        x: -688.46276330054
+        y: 2625.1246407955746
+      positionAbsolute:
+        x: -688.46276330054
+        y: 2625.1246407955746
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        agent_parameters:
+          instruction:
+            type: constant
+            value: "# 你的目标\n\n你可以精确理解用户的指令意图，并将其转换为系统可执行的标准化指令格式。你可以调用MCP获取额外的信息以辅助理解用户意图，注意mcp接口中所需的token参数为{{#1759562415940.token#}}，当前数字孪生场景的完整配置信息，包括层级结构、业务主题、演示汇报、图层、孪生体类别以及时间轴配置等核心信息从{{#conversation.sceneInfo#}}中获取。\n\
+              以下是用户提问先从上下文，其中question是用户的提问问题记录，content是返回的指令，从中分析当前场景的层级、状态以及界面信息等，\n\
+              {{#conversation.historyUser#}};\n以下是调用MCP接口相关的信息，其中tool_call_name是MCP接口名称，tool_response是接口返回的数据，调用MCP接口前先从调用过的接口中获取，千万不要重复调用，如果没有再调用MCP接口，\n\
+              {{#conversation.historyInter#}};\n\n\n## 工作流程\n\n1. 请根据用户的输入内容，智能匹配并直接输出最符合上述指令格式的内容。\n\
+              2. 若用户输入中包含多个意图，请一次输出多个对应指令。\n3. 对于括号中含有“其一”的选项，必须从已知选项中选择最匹配的一个。\n\
+              4. 对于括号中含有“名称”的选项，首先从MCP接口调用历史中查找，没有再调用MCP接口获取的信息中选择最匹配的一个，如果经过查找到没有匹配成功，拼接\
+              \ 固定语句“场景中没有找到匹配的信息，\" 以及通过MCP接口查找到的与问题相关的数据信息，然后用一个[]都括起来直接输出，且不用拼接任何指令，非常重要优先级最高。\n\
+              5. 剩下的智能输出所需的内容\n6. 当用户输入“生成XXXX”,\"统计XXX\",\"创建XXX\",\"分析XXX\"，\"统计一下XXX\"\
+              等类似表达是，必须识别为“C02：主题生成：XXX”\n7. 当用户输入询问类型的内容时，输出：D01：？，？，？；共X个，其中？代表查询的名称，需要把所有内容输出，然后X是统计的个数\n\
+              8. 当用户输入跟聚焦对象和选中对象相关的问题时，对象名称存时联系询问的上下文\n - 如果是对话的开始，没有上下文时，输出的指令必须包含\"\
+              A02：层级切换：（对象所在层级）\"；\n - 如果该对象与上一个对象操作是同一个层级的话，并且二者之间没有执行过任何层级切换相关指令（如A02、A03、A04、A05、A06）注意是二者之间的操作并不包括上一个对象的操作描述，则只输出输出响应的指令；否则输出的指令必须包含\"\
+              A02：层级切换：（对象所在层级）\"；\n - 如果对象名称存在多个层级，默认用第一个出现的层级\n9. 当用户询问有多少对象/孪生体，不带有某个层级时；应该输出所有层级下的孪生体类型以及该类型下的对象名称\n\
+              10. 当用户输入问题是跟主题切换相关的，如果主题名称存在，输出的指令必须包含\"A01：功能切换：分析$C01：主题切换：（主题名称）“\n\
+              11. 当用户输入问题跟告警相关时，如看一下告警信息，则输出“A36：告警信息：当前”,如看一下最新的告警，则输出“A36：告警信息：当前&A38：告警信息选中”，如最新的历史告警，则输出“A37：告警信息：历史&A38：告警信息选中”，如果是查看告警触发截图\
+              \ 则输出“A38：告警信息选中&A39：告警截图：打开”\n - 注意：根据上下文判断，如果上一个指令包括告警信息选中的指令，则不用输出多个指令，如果上一个指令是其他的或是对话的开始，则需要输出多个指令\n\
+              12. 当用户输入问题是 打开或关闭XXX灯开关 时，对象名称直接从智能开关孪生体中获取，输出“B07：打开灯：（对象名称）或者 B08：关闭灯：（对象名称）”\n\
+              \n## 特别注意事项\n\n1. 对用户输入进行模糊匹配，例如“园区概览”“园区概况”视为同义；\n2. 当用户输入包含多个操作（如“切换到第八层并选中摄像头01”），请分别输出多个指令（如：A02：层级切换：楼层8$B02：选中对象：摄像头01）；\n\
+              3. 当用户输入“切换主题到园区”“切换到园区主题”“切换园区”等类似表达时，也应识别为“A01：功能切换：分析$C01：主题切换：园区概况”。\n\
+              4. 对象上卷和对象下钻是不同的指令集，跟层级切换无关\n5. 不需要输出思考过程，不要询问用户任何问题，直接按照输出格式输出你认为正确的结果\n\
+              \n## 指令库\n\nA01：功能切换：？（AI分析、分析、对象、告警、过滤 其一）\nA02：层级切换：？（层级名称，必须是从工具接口中返回的内容）\n\
+              A03：层级切换：下一层\nA04：层级切换：上一层\nA05：层级切换：第一层\nA06：层级切换：最后一层\nA07：层级列表：？（打开、关闭\
+              \ 其一）\nA08：场景旋转：？（开始、停止 其一）\nA09：场景复位\nA10：视野放缩：拉近，100\nA10：视野放缩：远离，100\n\
+              A11：视野平移：？（前移、后移、左移、右移 其一），100\nA12：视野旋转：？（顺时针、逆时针 其一），10\nA13：时间轴：播放\n\
+              A14：时间轴：暂停\nA15：时间轴：跳转到？（时间点或关键锚点）\nA16：时间轴：？（回放、实时 其一）\nA17：图层管理：？（打开、关闭\
+              \ 其一）\nA18：显示图层：？（图层名称，必须是从工具接口中返回的内容）\nA19：隐藏图层：？（图层名称，必须是从工具接口中返回的内容）\n\
+              A20：图层全部显示\nA21：图层全部隐藏\nA22：图表管理：？（打开、关闭 其一）\nA23：显示图表：？（图表名称，必须是从工具接口中返回的内容）\n\
+              A24：关闭图表：？（图表名称，必须是从工具接口中返回的内容）\nA25：环境控制：？（打开、关闭 其一）\nA26：时间切换：？（具体时间点）\n\
+              A27：季节切换：？（春季、夏季、秋季、冬季 其一）\nA28：天气切换：？（晴、晴间多云、阴天、小雨、中雨、大雨、小雪、中雪、大雪、雾、霾、扬沙\
+              \ 其一）\nA29：演示汇报：？（打开、关闭 其一）\nA30：开始演示：？（演示汇报名称，必须是从工具接口中返回的内容）\nA31：停止演示\n\
+              A32：暂停演示\nA33：上一步演示\nA34：下一步演示\nA35：重新演示\nA36：告警信息：当前\nA37：告警信息：历史\n\
+              A38：告警信息选中 \nA39：告警截图：（打开、关闭 其一）\nB01：聚焦对象：？（对象名称，必须是从工具接口中返回的内容）\n\
+              B02：选中对象：？（对象名称，必须是从工具接口中返回的内容）\nB03：取消选中\nB04：对象下钻\nB05：对象上卷\nB06：搜索对象：？（搜索内容）\n\
+              B07：打开灯：？（对象名称，必须是从工具接口中返回的内容）\nB08：关闭灯：？（对象名称，必须是从工具接口中返回的内容）\nC01：主题切换：？（主题名称，必须是从工具接口中返回的内容）\n\
+              C02：主题生成：？（生成的内容）\nD01：？，？，？；共X个（询问类内容）\n\n## 输出格式\n\n[指令1$指令2$指令3$...]\n\
+              \n## 输出示例\n\n1. 示例1: 用户有两个意图，并且对应指令和参数的\n[A02：层级切换：楼层8$B02：选中对象：摄像头01]\n\
+              \n2. 示例2: 用户只有一个意图\n[A04：层级切换：上一层]\n\n3. 示例3: 用户有多个询问类意图\n[D01：摄像头01，摄像头02，摄像头03；共3个$D01：告警01，告警02；共2个]\n\
+              \n4. 示例4: 选中摄像头01\n[A02：层级切换：层级2$B02：选中对象：摄像头01]\n"
+          maximum_iterations:
+            type: constant
+            value: 4
+          model:
+            type: constant
+            value:
+              completion_params:
+                temperature: 0.1
+              mode: chat
+              model: deepseek-chat
+              model_type: llm
+              provider: langgenius/deepseek/deepseek
+              type: model-selector
+          query:
+            type: constant
+            value: '{{#sys.query#}}'
+          tools:
+            type: constant
+            value:
+            - enabled: true
+              extra:
+                description: '根据层级名称获取该层级下存在的所有孪生体类别名称列表。
+
+
+                  功能说明：根据指定的层级名称，查询该层级下存在哪些孪生体类别。返回的是孪生体类别名称（如：摄像头、传感器、设备等），而不是具体的实例名称。仅返回状态为''可用''的孪生体类别。
+
+
+                  输入参数：
+
+                  - levelName（必填）：string类型，层级名称，如''1F'', ''2F'', ''3F'', ''B1''等，需要与场景配置中的层级名称匹配，可通过GetSceneInfo接口获取可用的层级列表（LevelNames）
+
+                  - token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+                  输出说明：返回List<string>格式的数据，包含该层级下所有孪生体类别的名称（已去重），如果层级不存在或无数据，返回空列表
+
+
+                  注意事项：
+
+                  - levelName参数必填，需要与场景中配置的层级名称完全匹配
+
+                  - 返回的是孪生体类别名称，如需获取具体实例，请使用GetTwinCategoryData接口
+
+                  - 建议先调用GetSceneInfo获取可用的层级列表（LevelNames）
+
+                  - token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+              parameters:
+                levelName:
+                  auto: 1
+                  value: null
+                token:
+                  auto: 1
+                  value: null
+              provider_name: twinioc-mcp-2-5
+              provider_show_name: 孪易MCP2.5_Test短码
+              schemas:
+              - auto_generate: null
+                default: null
+                form: llm
+                human_description:
+                  en_US: 层级名称（必填），如：1F、2F、3F、B1等，需要与场景配置中的层级名称匹配
+                  ja_JP: 层级名称（必填），如：1F、2F、3F、B1等，需要与场景配置中的层级名称匹配
+                  pt_BR: 层级名称（必填），如：1F、2F、3F、B1等，需要与场景配置中的层级名称匹配
+                  zh_Hans: 层级名称（必填），如：1F、2F、3F、B1等，需要与场景配置中的层级名称匹配
+                label:
+                  en_US: levelName
+                  ja_JP: levelName
+                  pt_BR: levelName
+                  zh_Hans: levelName
+                llm_description: 层级名称（必填），如：1F、2F、3F、B1等，需要与场景配置中的层级名称匹配
+                max: null
+                min: null
+                name: levelName
+                options: []
+                placeholder: null
+                precision: null
+                required: true
+                scope: null
+                template: null
+                type: string
+              - auto_generate: null
+                default: null
+                form: llm
+                human_description:
+                  en_US: SignalR连接时返回的6位UniqueId
+                  ja_JP: SignalR连接时返回的6位UniqueId
+                  pt_BR: SignalR连接时返回的6位UniqueId
+                  zh_Hans: SignalR连接时返回的6位UniqueId
+                label:
+                  en_US: token
+                  ja_JP: token
+                  pt_BR: token
+                  zh_Hans: token
+                llm_description: SignalR连接时返回的6位UniqueId
+                max: null
+                min: null
+                name: token
+                options: []
+                placeholder: null
+                precision: null
+                required: true
+                scope: null
+                template: null
+                type: string
+              settings: {}
+              tool_description: '根据层级名称获取该层级下存在的所有孪生体类别名称列表。
+
+
+                功能说明：根据指定的层级名称，查询该层级下存在哪些孪生体类别。返回的是孪生体类别名称（如：摄像头、传感器、设备等），而不是具体的实例名称。仅返回状态为''可用''的孪生体类别。
+
+
+                输入参数：
+
+                - levelName（必填）：string类型，层级名称，如''1F'', ''2F'', ''3F'', ''B1''等，需要与场景配置中的层级名称匹配，可通过GetSceneInfo接口获取可用的层级列表（LevelNames）
+
+                - token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+                输出说明：返回List<string>格式的数据，包含该层级下所有孪生体类别的名称（已去重），如果层级不存在或无数据，返回空列表
+
+
+                注意事项：
+
+                - levelName参数必填，需要与场景中配置的层级名称完全匹配
+
+                - 返回的是孪生体类别名称，如需获取具体实例，请使用GetTwinCategoryData接口
+
+                - 建议先调用GetSceneInfo获取可用的层级列表（LevelNames）
+
+                - token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+              tool_label: get_twin_category
+              tool_name: get_twin_category
+              type: mcp
+            - enabled: true
+              extra:
+                description: '获取当前数字孪生场景中配置的所有图表名称列表。
+
+
+                  功能说明：查询并返回场景中所有状态为''可用''的图表名称，用于了解场景中有哪些数据可视化图表可供使用。
+
+
+                  输入参数：token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+                  输出说明：返回List<string>格式的数据，包含场景中所有可用图表的名称，如''能耗统计图'', ''温度趋势图'', ''设备状态图''等，如果场景中无图表配置，返回空列表
+
+
+                  注意事项：token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+              parameters:
+                token:
+                  auto: 1
+                  value: null
+              provider_name: twinioc-mcp-2-5
+              provider_show_name: 孪易MCP2.5_Test短码
+              schemas:
+              - auto_generate: null
+                default: null
+                form: llm
+                human_description:
+                  en_US: SignalR连接时返回的6位UniqueId
+                  ja_JP: SignalR连接时返回的6位UniqueId
+                  pt_BR: SignalR连接时返回的6位UniqueId
+                  zh_Hans: SignalR连接时返回的6位UniqueId
+                label:
+                  en_US: token
+                  ja_JP: token
+                  pt_BR: token
+                  zh_Hans: token
+                llm_description: SignalR连接时返回的6位UniqueId
+                max: null
+                min: null
+                name: token
+                options: []
+                placeholder: null
+                precision: null
+                required: true
+                scope: null
+                template: null
+                type: string
+              settings: {}
+              tool_description: '获取当前数字孪生场景中配置的所有图表名称列表。
+
+
+                功能说明：查询并返回场景中所有状态为''可用''的图表名称，用于了解场景中有哪些数据可视化图表可供使用。
+
+
+                输入参数：token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+                输出说明：返回List<string>格式的数据，包含场景中所有可用图表的名称，如''能耗统计图'', ''温度趋势图'', ''设备状态图''等，如果场景中无图表配置，返回空列表
+
+
+                注意事项：token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+              tool_label: get_charts
+              tool_name: get_charts
+              type: mcp
+            - enabled: true
+              extra:
+                description: '根据孪生体类别名称获取该类别下的所有孪生体实例名称列表。
+
+
+                  功能说明：根据指定的孪生体类别名称，从场景的孪生体数据表中查询该类别下所有孪生体实例的名称。仅返回状态为''可用''的孪生体实例。
+
+
+                  输入参数：
+
+                  - twinCategoryName（必填）：string类型，孪生体类别名称，如''设备'', ''人员'', ''车辆'',
+                  ''传感器'', ''摄像头''等，需要与场景配置中的孪生体类别名称匹配，可通过GetSceneInfo接口获取可用的类别列表（TwinCategoryNames）
+
+                  - token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+                  输出说明：返回List<object>格式的数据，按层级分组，每个对象包含：
+
+                  - 层级名称：string类型，孪生体所属的层级名称，如''1F'', ''2F'', ''B1''
+
+                  - 孪生体实例：List<string>类型，该层级下所有孪生体实例的名称列表（已去重）
+
+                  如果类别不存在或无数据，返回空列表
+
+
+                  注意事项：
+
+                  - twinCategoryName参数必填，需要与场景中配置的孪生体类别名称完全匹配
+
+                  - 建议先调用GetSceneInfo获取可用的孪生体类别列表（TwinCategoryNames）
+
+                  - token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+              parameters:
+                token:
+                  auto: 1
+                  value: null
+                twinCategoryName:
+                  auto: 1
+                  value: null
+              provider_name: twinioc-mcp-2-5
+              provider_show_name: 孪易MCP2.5_Test短码
+              schemas:
+              - auto_generate: null
+                default: null
+                form: llm
+                human_description:
+                  en_US: 孪生体类别名称（必填），如：设备、人员、车辆、传感器、摄像头等，需要与场景配置中的类别名称匹配
+                  ja_JP: 孪生体类别名称（必填），如：设备、人员、车辆、传感器、摄像头等，需要与场景配置中的类别名称匹配
+                  pt_BR: 孪生体类别名称（必填），如：设备、人员、车辆、传感器、摄像头等，需要与场景配置中的类别名称匹配
+                  zh_Hans: 孪生体类别名称（必填），如：设备、人员、车辆、传感器、摄像头等，需要与场景配置中的类别名称匹配
+                label:
+                  en_US: twinCategoryName
+                  ja_JP: twinCategoryName
+                  pt_BR: twinCategoryName
+                  zh_Hans: twinCategoryName
+                llm_description: 孪生体类别名称（必填），如：设备、人员、车辆、传感器、摄像头等，需要与场景配置中的类别名称匹配
+                max: null
+                min: null
+                name: twinCategoryName
+                options: []
+                placeholder: null
+                precision: null
+                required: true
+                scope: null
+                template: null
+                type: string
+              - auto_generate: null
+                default: null
+                form: llm
+                human_description:
+                  en_US: SignalR连接时返回的6位UniqueId
+                  ja_JP: SignalR连接时返回的6位UniqueId
+                  pt_BR: SignalR连接时返回的6位UniqueId
+                  zh_Hans: SignalR连接时返回的6位UniqueId
+                label:
+                  en_US: token
+                  ja_JP: token
+                  pt_BR: token
+                  zh_Hans: token
+                llm_description: SignalR连接时返回的6位UniqueId
+                max: null
+                min: null
+                name: token
+                options: []
+                placeholder: null
+                precision: null
+                required: true
+                scope: null
+                template: null
+                type: string
+              settings: {}
+              tool_description: '根据孪生体类别名称获取该类别下的所有孪生体实例名称列表。
+
+
+                功能说明：根据指定的孪生体类别名称，从场景的孪生体数据表中查询该类别下所有孪生体实例的名称。仅返回状态为''可用''的孪生体实例。
+
+
+                输入参数：
+
+                - twinCategoryName（必填）：string类型，孪生体类别名称，如''设备'', ''人员'', ''车辆'', ''传感器'',
+                ''摄像头''等，需要与场景配置中的孪生体类别名称匹配，可通过GetSceneInfo接口获取可用的类别列表（TwinCategoryNames）
+
+                - token（必填）：string类型，SignalR连接时返回的6位UniqueId
+
+
+                输出说明：返回List<object>格式的数据，按层级分组，每个对象包含：
+
+                - 层级名称：string类型，孪生体所属的层级名称，如''1F'', ''2F'', ''B1''
+
+                - 孪生体实例：List<string>类型，该层级下所有孪生体实例的名称列表（已去重）
+
+                如果类别不存在或无数据，返回空列表
+
+
+                注意事项：
+
+                - twinCategoryName参数必填，需要与场景中配置的孪生体类别名称完全匹配
+
+                - 建议先调用GetSceneInfo获取可用的孪生体类别列表（TwinCategoryNames）
+
+                - token参数必填，使用SignalR连接的6位UniqueId进行场景身份验证'
+              tool_label: get_twin_category_data
+              tool_name: get_twin_category_data
+              type: mcp
+        agent_strategy_label: FunctionCalling
+        agent_strategy_name: function_calling
+        agent_strategy_provider_name: langgenius/agent/agent
+        meta:
+          minimum_dify_version: 1.7.0
+          version: 0.0.2
+        output_schema: {}
+        plugin_unique_identifier: langgenius/agent:0.0.25@3507a9a417ea8d76e5de6b2803953ca891851b6b336fafe1315471782711730f
+        selected: false
+        title: Agent
+        tool_node_version: '2'
+        type: agent
+      height: 188
+      id: '1769061528932'
+      position:
+        x: -25.75364328324497
+        y: 2326.0570182725687
+      positionAbsolute:
+        x: -25.75364328324497
+        y: 2326.0570182725687
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "from typing import List, Dict, Any\nimport json\n\ndef main(arg1: str,\
+          \ arg2: List[Dict[str, Any]], arg3: List[Dict[str, Any]], arg4: str = \"\
+          \") -> Dict[str, Any]:\n    \"\"\"\n    处理JSON数据并更新存储数组\n    \n    Args:\n\
+          \        arg1: 输入的JSON字符串\n        arg2: 存储工具记录的数组，作为基础数组传入\n        arg3:\
+          \ 存储倒数第二个对象data.output内容的数组，作为基础数组传入\n        arg4: 问题字符串，需要存储到arg3记录的question字段中\n\
+          \    \n    Returns:\n        Dict[str, Any]: 包含处理结果和更新后的存储数组\n    \"\"\"\
+          \n    \n    try:\n        # 解析输入数据\n        if isinstance(arg1, str):\n\
+          \            input_data = json.loads(arg1)\n        else:\n            input_data\
+          \ = arg1\n        \n        # 获取对话数据\n        if isinstance(input_data,\
+          \ dict) and 'arg1' in input_data:\n            dialog_data = input_data['arg1']\n\
+          \        else:\n            dialog_data = input_data\n        \n       \
+          \ # 确保是列表\n        if not isinstance(dialog_data, list):\n            dialog_data\
+          \ = [dialog_data]\n        \n        # 确保arg2是列表\n        if not isinstance(arg2,\
+          \ list):\n            arg2 = []\n        \n        # 确保arg3是列表\n       \
+          \ if not isinstance(arg3, list):\n            arg3 = []\n        \n    \
+          \    # 复制传入的数组，避免直接修改原数组\n        existing_tool_records = arg2.copy()\n\
+          \        existing_output_records = arg3.copy()\n        \n        # 收集新找到的工具记录\n\
+          \        new_tool_records = []\n        \n        # 遍历对话数据，处理工具记录\n    \
+          \    for item in dialog_data:\n            if not isinstance(item, dict):\n\
+          \                continue\n            \n            # 检查是否有tool_responses\n\
+          \            responses = None\n            try:\n                responses\
+          \ = item.get('data', {}).get('output', {}).get('tool_responses', [])\n \
+          \           except:\n                continue\n            \n          \
+          \  if isinstance(responses, list):\n                for resp in responses:\n\
+          \                    if isinstance(resp, dict):\n                      \
+          \  tool_name = resp.get('tool_call_name')\n                        tool_response\
+          \ = resp.get('tool_response')\n                        \n              \
+          \          if tool_name is not None and tool_response is not None:\n   \
+          \                         # 创建新记录\n                            record =\
+          \ {\n                                'tool_call_name': tool_name,\n    \
+          \                            'tool_response': tool_response\n          \
+          \                  }\n                            new_tool_records.append(record)\n\
+          \        \n        # 处理倒数第二个对象的data.output内容（修改部分）\n        new_output_record\
+          \ = None\n        if len(dialog_data) >= 2:\n            # 获取倒数第二个对象\n \
+          \           second_last_item = dialog_data[-2]\n            if isinstance(second_last_item,\
+          \ dict):\n                try:\n                    output_content = second_last_item.get('data',\
+          \ {}).get('output')\n                    if output_content is not None:\n\
+          \                        # 获取output中最后一个[]中的内容\n                       \
+          \ last_bracket_content = None\n                        if isinstance(output_content,\
+          \ str):\n                            # 查找最后一个[]及其内容\n                  \
+          \          last_open_bracket = output_content.rfind('[')\n             \
+          \               last_close_bracket = output_content.rfind(']')\n       \
+          \                     if last_open_bracket != -1 and last_close_bracket\
+          \ != -1 and last_close_bracket > last_open_bracket:\n                  \
+          \              last_bracket_content = output_content[last_open_bracket +\
+          \ 1:last_close_bracket].strip()\n                        \n            \
+          \            # 创建输出记录对象\n                        new_output_record = {\n\
+          \                            'question': arg4 if arg4 else \"\",  # 添加arg4到question字段\n\
+          \                            'content': last_bracket_content  # 存储最后一个[]中的内容\n\
+          \                        }\n                except Exception as e:\n   \
+          \                 print(f\"处理输出内容时出错: {e}\")\n        \n        # 处理工具记录：将新记录添加到现有记录的末尾（新的在后）\n\
+          \        tool_result_msg = \"未找到新的工具记录\"\n        if new_tool_records:\n\
+          \            # 先添加旧记录，再添加新记录（这样新记录在末尾）\n            existing_tool_records\
+          \ = existing_tool_records + new_tool_records\n            \n           \
+          \ # 限制最多20条记录（删除最前面的，即最旧的）\n            if len(existing_tool_records) >\
+          \ 20:\n                existing_tool_records = existing_tool_records[-20:]\n\
+          \            \n            tool_result_msg = f\"添加 {len(new_tool_records)}\
+          \ 条新工具记录，当前共 {len(existing_tool_records)} 条记录\"\n        \n        # 处理输出记录：将新记录添加到现有记录的末尾（新的在后）\n\
+          \        output_result_msg = \"未找到新的输出记录\"\n        if new_output_record\
+          \ is not None:\n            # 先添加旧记录，再添加新记录（这样新记录在末尾）\n            existing_output_records\
+          \ = existing_output_records + [new_output_record]\n            \n      \
+          \      # 限制最多20条记录（删除最前面的，即最旧的）\n            if len(existing_output_records)\
+          \ > 20:\n                existing_output_records = existing_output_records[-20:]\n\
+          \            \n            output_result_msg = f\"添加 1 条新输出记录，当前共 {len(existing_output_records)}\
+          \ 条记录\"\n        \n        # 组合结果消息\n        result_msg = f\"{tool_result_msg};\
+          \ {output_result_msg}\"\n        \n        # 返回结果，包含处理结果和更新后的数组\n      \
+          \  return {\n            \"result\": result_msg,\n            \"output\"\
+          : existing_tool_records,\n            \"output2\": existing_output_records\n\
+          \        }\n        \n    except Exception as e:\n        # 确保错误信息是字符串\n\
+          \        error_msg = str(e)\n        # 返回错误结果\n        return {\n      \
+          \      \"result\": f\"处理失败: {error_msg}\",\n            \"output\": arg2,\
+          \  # 出错时返回原始数组\n            \"output2\": arg3  # 出错时返回原始数组\n        }"
+        code_language: python3
+        outputs:
+          output:
+            children: null
+            type: array[object]
+          output2:
+            children: null
+            type: array[object]
+          result:
+            children: null
+            type: string
+        selected: false
+        title: 代码执行接口调用缓存
+        type: code
+        variables:
+        - value_selector:
+          - '1769061528932'
+          - json
+          value_type: array[object]
+          variable: arg1
+        - value_selector:
+          - conversation
+          - historyInter
+          value_type: array[object]
+          variable: arg2
+        - value_selector:
+          - conversation
+          - historyUser
+          value_type: array[string]
+          variable: arg3
+        - value_selector:
+          - sys
+          - query
+          value_type: string
+          variable: arg4
+      height: 52
+      id: '1769074783915'
+      position:
+        x: 332.413905194653
+        y: 2701.351382341639
+      positionAbsolute:
+        x: 332.413905194653
+        y: 2701.351382341639
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        items:
+        - input_type: variable
+          operation: over-write
+          value:
+          - '1769074783915'
+          - output
+          variable_selector:
+          - conversation
+          - historyInter
+          write_mode: over-write
+        - input_type: variable
+          operation: over-write
+          value:
+          - '1769074783915'
+          - output2
+          variable_selector:
+          - conversation
+          - historyUser
+          write_mode: over-write
+        selected: false
+        title: 变量赋值 2
+        type: assigner
+        version: '2'
+      height: 110
+      id: '1769077659992'
+      position:
+        x: 794.5394745214749
+        y: 2738.353476928736
+      positionAbsolute:
+        x: 794.5394745214749
+        y: 2738.353476928736
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        author: 牛军科
+        desc: ''
+        height: 97
+        selected: false
+        showAuthor: true
+        text: '{"root":{"children":[{"children":[{"detail":0,"format":0,"mode":"normal","style":"","text":"判断如果输入的token不一样，历史变量清空，场景变量重新获取","type":"text","version":1}],"direction":null,"format":"","indent":0,"type":"paragraph","version":1,"textFormat":0,"textStyle":""}],"direction":null,"format":"","indent":0,"type":"root","version":1}}'
+        theme: blue
+        title: ''
+        type: ''
+        width: 241
+      height: 97
+      id: '1769246541884'
+      position:
+        x: -380.1800974876929
+        y: 2511.1384515997624
+      positionAbsolute:
+        x: -380.1800974876929
+        y: 2511.1384515997624
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-note
+      width: 241
+    viewport:
+      x: 769.317331671356
+      y: -864.3483817937292
+      zoom: 0.5000000000000001
+  rag_pipeline_variables: []

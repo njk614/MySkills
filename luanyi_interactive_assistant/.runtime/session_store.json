@@ -1,0 +1,53 @@
+{
+  "demo-001": {
+    "session_id": "demo-001",
+    "token_judge": "bsn6bf",
+    "scene_info": "{\"fallback\": true, \"message\": \"scene_info 获取失败，已降级为无场景缓存模式\", \"reason\": \"MCP 工具调用失败(get_scene_info): \"}",
+    "history_user": [
+      {
+        "question": "下一层",
+        "content": "A03：层级切换：下一层"
+      },
+      {
+        "question": "下一层",
+        "content": "A03：层级切换：下一层"
+      },
+      {
+        "question": "上一层",
+        "content": "A04：层级切换：上一层"
+      },
+      {
+        "question": "上一层",
+        "content": "A04：层级切换：上一层"
+      }
+    ],
+    "history_inter": [],
+    "updated_at": 1773136533.173999
+  },
+  "connectivity-check-001": {
+    "session_id": "connectivity-check-001",
+    "token_judge": "390890",
+    "scene_info": "{\"fallback\": true, \"message\": \"scene_info 获取失败，已降级为无场景缓存模式\", \"reason\": \"MCP 工具调用失败(get_scene_info): \"}",
+    "history_user": [
+      {
+        "question": "切换到下一层",
+        "content": "A03：层级切换：下一层"
+      }
+    ],
+    "history_inter": [],
+    "updated_at": 1773133655.6715968
+  },
+  "verify-bsn6bf": {
+    "session_id": "verify-bsn6bf",
+    "token_judge": "bsn6bf",
+    "scene_info": "{\"fallback\": true, \"message\": \"scene_info 获取失败，已降级为无场景缓存模式\", \"reason\": \"MCP 工具调用失败(get_scene_info) status=500 url=http://test.twinioc.net/api/editor/mcp body=\"}",
+    "history_user": [
+      {
+        "question": "下一层",
+        "content": "A03：层级切换：下一层"
+      }
+    ],
+    "history_inter": [],
+    "updated_at": 1773136797.0807717
+  }
+}
