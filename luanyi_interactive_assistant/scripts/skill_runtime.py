@@ -4,6 +4,7 @@ import json
 import os
 import time
 from dataclasses import asdict, dataclass, field
+from itertools import count
 from pathlib import Path
 from typing import Any
 
@@ -20,9 +21,11 @@ DEFAULT_MCP_BASE_URL = os.getenv("TWINEASY_MCP_BASE_URL", "http://test.twinioc.n
 DEFAULT_TWINEASY_SERVER_URL = os.getenv("TWINEASY_SERVER_URL", "http://test.twinioc.net/api/editor").rstrip("/")
 DEFAULT_LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
 MCP_AUTH_IN_HEADER = os.getenv("MCP_AUTH_IN_HEADER", "false").lower() == "true"
+MCP_PROTOCOL_VERSION = os.getenv("MCP_PROTOCOL_VERSION", "2025-03-26")
 MAX_HISTORY_ITEMS = 20
 MAX_ITERATIONS = 4
 STATE_FILE = Path(__file__).resolve().parent.parent / ".runtime" / "session_store.json"
+JSON_RPC_ID_COUNTER = count(1)
 
 
 @dataclass
@@ -39,6 +42,8 @@ class SessionState:
     scene_info: str = ""
     history_user: list[dict[str, Any]] = field(default_factory=list)
     history_inter: list[dict[str, Any]] = field(default_factory=list)
+    mcp_session_id: str = ""
+    mcp_initialized: bool = False
     updated_at: float = field(default_factory=time.time)
 
     def reset_for_token(self, token: str) -> None:
@@ -46,6 +51,8 @@ class SessionState:
         self.scene_info = ""
         self.history_user.clear()
         self.history_inter.clear()
+        self.mcp_session_id = ""
+        self.mcp_initialized = False
         self.updated_at = time.time()
 
 
@@ -253,6 +260,8 @@ def _load_session_store() -> dict[str, SessionState]:
             scene_info=payload.get("scene_info", ""),
             history_user=list(payload.get("history_user", []) or []),
             history_inter=list(payload.get("history_inter", []) or []),
+            mcp_session_id=payload.get("mcp_session_id", ""),
+            mcp_initialized=bool(payload.get("mcp_initialized", False)),
             updated_at=float(payload.get("updated_at", time.time())),
         )
     return result
@@ -301,34 +310,244 @@ def _get_llm_headers() -> dict[str, str]:
     }
 
 
-def _get_mcp_headers(token: str) -> dict[str, str]:
-    headers = {"Content-Type": "application/json"}
+def _get_mcp_headers(token: str, mcp_session_id: str | None = None) -> dict[str, str]:
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
     if token and MCP_AUTH_IN_HEADER:
         headers["Authorization"] = f"Bearer {token}"
+    if mcp_session_id:
+        headers["Mcp-Session-Id"] = mcp_session_id
     return headers
 
 
-async def _invoke_mcp_tool(client: httpx.AsyncClient, tool_name: str, arguments: dict[str, Any], token: str) -> Any:
-    direct_url = f"{DEFAULT_MCP_BASE_URL}/{tool_name}"
-    wrapped_payload = {"tool_name": tool_name, "arguments": arguments}
-    headers = _get_mcp_headers(token)
+def _next_json_rpc_id() -> int:
+    return next(JSON_RPC_ID_COUNTER)
 
-    response = await client.post(direct_url, headers=headers, json=arguments)
-    if response.status_code in {404, 405}:
-        response = await client.post(DEFAULT_MCP_BASE_URL, headers=headers, json=wrapped_payload)
+
+def _extract_sse_payloads(raw_text: str) -> list[Any]:
+    payloads: list[Any] = []
+    current_data: list[str] = []
+
+    for line in raw_text.splitlines():
+        if not line.strip():
+            if current_data:
+                joined = "\n".join(current_data)
+                parsed = _safe_json_loads(joined)
+                if parsed is not None:
+                    payloads.append(parsed)
+                current_data = []
+            continue
+        if line.startswith("data:"):
+            current_data.append(line[5:].lstrip())
+
+    if current_data:
+        joined = "\n".join(current_data)
+        parsed = _safe_json_loads(joined)
+        if parsed is not None:
+            payloads.append(parsed)
+    return payloads
+
+
+def _find_json_rpc_message(payload: Any, request_id: int) -> dict[str, Any] | None:
+    if isinstance(payload, list):
+        for item in payload:
+            matched = _find_json_rpc_message(item, request_id)
+            if matched is not None:
+                return matched
+        return None
+    if isinstance(payload, dict) and payload.get("id") == request_id:
+        return payload
+    return None
+
+
+def _parse_mcp_response_payload(response: httpx.Response, request_id: int) -> dict[str, Any] | None:
+    content_type = response.headers.get("content-type", "").lower()
+    text = response.text or ""
+
+    if response.status_code == 202:
+        return None
+
+    if "application/json" in content_type:
+        parsed = _safe_json_loads(text)
+        if parsed is None:
+            raise SkillRuntimeError(f"MCP 返回了无法解析的 JSON: {text[:500]}")
+        matched = _find_json_rpc_message(parsed, request_id)
+        if matched is None:
+            raise SkillRuntimeError(f"MCP 未返回匹配请求 {request_id} 的 JSON-RPC 响应: {text[:500]}")
+        return matched
+
+    if "text/event-stream" in content_type:
+        payloads = _extract_sse_payloads(text)
+        matched = _find_json_rpc_message(payloads, request_id)
+        if matched is None:
+            raise SkillRuntimeError(f"MCP SSE 未返回匹配请求 {request_id} 的 JSON-RPC 响应: {text[:500]}")
+        return matched
+
+    parsed = _safe_json_loads(text)
+    if parsed is not None:
+        matched = _find_json_rpc_message(parsed, request_id)
+        if matched is not None:
+            return matched
+    raise SkillRuntimeError(
+        f"MCP 返回了未知响应类型 status={response.status_code} content-type={content_type} body={text[:500]}"
+    )
+
+
+def _normalize_mcp_tool_result(result: Any) -> Any:
+    if not isinstance(result, dict):
+        return result
+
+    content = result.get("content")
+    if not isinstance(content, list):
+        return result
+
+    texts: list[str] = []
+    normalized_items: list[Any] = []
+    for item in content:
+        if not isinstance(item, dict):
+            normalized_items.append(item)
+            continue
+        if item.get("type") == "text":
+            text = str(item.get("text", ""))
+            texts.append(text)
+            parsed = _safe_json_loads(text)
+            normalized_items.append(parsed if parsed is not None else text)
+        elif item.get("type") == "resource":
+            normalized_items.append(item.get("resource", item))
+        else:
+            normalized_items.append(item)
+
+    if len(normalized_items) == 1:
+        return normalized_items[0]
+    if texts and len(texts) == len(normalized_items):
+        return "\n".join(texts)
+    return normalized_items
+
+
+async def _post_mcp_json_rpc(
+    client: httpx.AsyncClient,
+    token: str,
+    method: str,
+    params: dict[str, Any] | None,
+    mcp_session_id: str | None = None,
+    expect_response: bool = True,
+) -> tuple[dict[str, Any] | None, str | None]:
+    request_id = _next_json_rpc_id()
+    payload: dict[str, Any] = {
+        "jsonrpc": "2.0",
+        "method": method,
+    }
+    if params is not None:
+        payload["params"] = params
+    if expect_response:
+        payload["id"] = request_id
+
+    headers = _get_mcp_headers(token, mcp_session_id)
+    response = await client.post(DEFAULT_MCP_BASE_URL, headers=headers, json=payload)
 
     if response.status_code >= 400:
         response_text = response.text.strip()
         raise SkillRuntimeError(
-            f"MCP 工具调用失败({tool_name}) status={response.status_code} url={response.request.url} body={response_text}"
+            f"MCP 请求失败(method={method}) status={response.status_code} url={response.request.url} body={response_text}"
         )
 
-    json_data = _safe_json_loads(response.text)
-    return json_data if json_data is not None else response.text
+    next_session_id = response.headers.get("Mcp-Session-Id") or mcp_session_id
+    parsed = _parse_mcp_response_payload(response, request_id) if expect_response else None
+    return parsed, next_session_id
 
 
-async def _fetch_scene_info(client: httpx.AsyncClient, token: str) -> Any:
-    return await _invoke_mcp_tool(client, "get_scene_info", {"token": token}, token)
+async def _ensure_mcp_initialized(client: httpx.AsyncClient, session: SessionState, token: str) -> None:
+    if session.mcp_initialized:
+        return
+
+    initialize_response, mcp_session_id = await _post_mcp_json_rpc(
+        client=client,
+        token=token,
+        method="initialize",
+        params={
+            "protocolVersion": MCP_PROTOCOL_VERSION,
+            "capabilities": {"roots": {}, "sampling": {}},
+            "clientInfo": {
+                "name": SKILL_NAME,
+                "version": "1.0.0",
+            },
+        },
+        mcp_session_id=None,
+        expect_response=True,
+    )
+    if not initialize_response:
+        raise SkillRuntimeError("MCP 初始化失败：未收到 initialize 响应")
+    if initialize_response.get("error"):
+        raise SkillRuntimeError(f"MCP 初始化失败: {initialize_response['error']}")
+
+    session.mcp_session_id = mcp_session_id or ""
+    await _post_mcp_json_rpc(
+        client=client,
+        token=token,
+        method="notifications/initialized",
+        params=None,
+        mcp_session_id=session.mcp_session_id or None,
+        expect_response=False,
+    )
+    session.mcp_initialized = True
+
+
+async def _invoke_mcp_tool(
+    client: httpx.AsyncClient,
+    session: SessionState,
+    tool_name: str,
+    arguments: dict[str, Any],
+    token: str,
+) -> Any:
+    try:
+        await _ensure_mcp_initialized(client, session, token)
+        response_payload, next_session_id = await _post_mcp_json_rpc(
+            client=client,
+            token=token,
+            method="tools/call",
+            params={
+                "name": tool_name,
+                "arguments": arguments,
+            },
+            mcp_session_id=session.mcp_session_id or None,
+            expect_response=True,
+        )
+    except SkillRuntimeError as exc:
+        if session.mcp_session_id and "status=404" in str(exc):
+            session.mcp_session_id = ""
+            session.mcp_initialized = False
+            await _ensure_mcp_initialized(client, session, token)
+            response_payload, next_session_id = await _post_mcp_json_rpc(
+                client=client,
+                token=token,
+                method="tools/call",
+                params={
+                    "name": tool_name,
+                    "arguments": arguments,
+                },
+                mcp_session_id=session.mcp_session_id or None,
+                expect_response=True,
+            )
+        else:
+            raise
+
+    if next_session_id:
+        session.mcp_session_id = next_session_id
+    if not response_payload:
+        raise SkillRuntimeError(f"MCP 工具调用失败({tool_name})：未收到 tools/call 响应")
+    if response_payload.get("error"):
+        raise SkillRuntimeError(f"MCP 工具调用失败({tool_name})：{response_payload['error']}")
+
+    result = response_payload.get("result")
+    if isinstance(result, dict) and result.get("isError"):
+        raise SkillRuntimeError(f"MCP 工具调用失败({tool_name})：{_stringify(result)}")
+    return _normalize_mcp_tool_result(result)
+
+
+async def _fetch_scene_info(client: httpx.AsyncClient, session: SessionState, token: str) -> Any:
+    return await _invoke_mcp_tool(client, session, "get_scene_info", {"token": token}, token)
 
 
 async def _call_llm(client: httpx.AsyncClient, messages: list[dict[str, Any]], model_name: str) -> dict[str, Any]:
@@ -397,7 +616,7 @@ async def _run_agent(client: httpx.AsyncClient, query: str, token: str, session:
                 if "token" not in arguments:
                     arguments["token"] = token
                 try:
-                    tool_result = await _invoke_mcp_tool(client, tool_name, arguments, token)
+                    tool_result = await _invoke_mcp_tool(client, session, tool_name, arguments, token)
                 except SkillRuntimeError as exc:
                     tool_result = {
                         "success": False,
@@ -588,7 +807,6 @@ def _append_history(session: SessionState, query: str, agent_text: str, tool_cal
 async def invoke_skill(
     query: str,
     token: str,
-    session_id: str | None = None,
     execute_instruction: bool = True,
     debug: bool = False,
     llm_model: str | None = None,
@@ -598,7 +816,7 @@ async def invoke_skill(
     if not token:
         raise SkillRuntimeError("token 不能为空")
 
-    session_key = session_id or token
+    session_key = token
     store = _load_session_store()
     session = _get_or_create_session(store, session_key)
     scene_info_error: str | None = None
@@ -609,7 +827,7 @@ async def invoke_skill(
         async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
             if not session.scene_info or session.token_judge != token:
                 try:
-                    scene_info_raw = await _fetch_scene_info(client, token)
+                    scene_info_raw = await _fetch_scene_info(client, session, token)
                     session.scene_info = _stringify(scene_info_raw)
                 except SkillRuntimeError as exc:
                     scene_info_error = str(exc)

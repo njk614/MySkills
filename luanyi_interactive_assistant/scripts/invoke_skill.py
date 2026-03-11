@@ -17,7 +17,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Invoke luanyi interactive assistant skill")
     parser.add_argument("--query", required=True, help="用户输入的自然语言指令")
     parser.add_argument("--token", required=True, help="孪易场景 token")
-    parser.add_argument("--session-id", default=None, help="会话标识，默认使用 token")
     parser.add_argument(
         "--no-execute",
         action="store_true",
@@ -34,7 +33,6 @@ async def main() -> int:
         result = await invoke_skill(
             query=args.query,
             token=args.token,
-            session_id=args.session_id,
             execute_instruction=not args.no_execute,
             debug=args.debug,
             llm_model=args.llm_model,
