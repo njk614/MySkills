@@ -1,13 +1,27 @@
----
+﻿---
 name: twinioc-interactive-command
-description: This skill should be used when users need to convert Chinese natural-language TwinEasy scene interaction requests into executable command sequences, produce segmented response text compatible with the existing front-end format, and prepare or send the SendInstruction HTTP payload.
+description: This skill should be used when users need to convert Chinese natural-language TwinEasy scene interaction requests into executable command sequences. The AI agent that loads this skill handles all reasoning and command generation; the Python runtime is a pure execution layer that sends instructions and manages session history.
 ---
 
-# 孪易交互助手
+# 孪易交互指令助手
+
+> **⚠️ 强制约束（最高优先级，任何情况下不得违反）**
+>
+> 1. **禁止**用 curl、HTTP 请求或任何其他方式直接调用孪易接口。
+> 2. **所有操作**（查询数据、发送指令）必须通过运行 `scripts/invoke_skill.py` 脚本完成。
+> 3. 两类脚本调用：
+>    - **查询 MCP 数据**：`python scripts/invoke_skill.py --token <token> --mcp-tool <工具名> [--mcp-args '{"参数":"值"}']`
+>    - **执行指令**：`python scripts/invoke_skill.py --token <token> --query "..." --agent-output "[指令串]"`
+> 4. 脚本返回 JSON，从中读取数据后继续下一步，**不得在未运行脚本的情况下自行推测结果**。
 
 ## Overview
 
-处理孪易场景交互请求时，执行“理解用户意图 → 生成标准指令串 → 输出中文执行计划 → 组织 HTTP 请求体 → 产出分段返回”的完整流程。
+本 Skill 负责将用户的中文自然语言请求转换为孪易平台可执行指令串，并通过 Python 执行层将指令下发到场景。
+
+**架构说明（重要）：**
+
+- **加载本文件的 AI（本文档）**：承担全部推理，根据下方规则和指令库独立生成指令串。
+- **Python 运行时**：纯执行层，负责 MCP 工具调用、会话状态管理和 `SendInstruction` HTTP 请求。不含任何大模型调用逻辑。
 
 优先保证两件事：
 
@@ -22,7 +36,7 @@ description: This skill should be used when users need to convert Chinese natura
 - 需要根据已有场景信息、历史操作、工具结果推断最合理的执行指令。
 - 需要输出与既有前端兼容的 `THISSECTIONEND` / `AGENTEND` 分段结果。
 - 需要组织或发送 `POST /v1/location/SendInstruction` 请求。
-- 需要区分“用户可见文本”和“执行用指令编码”。
+- 需要区分"用户可见文本"和"执行用指令编码"。
 
 不要在纯闲聊、无孪易场景控制需求、也无指令执行需求的场景触发本 Skill。
 
@@ -32,16 +46,32 @@ description: This skill should be used when users need to convert Chinese natura
 
 - `query`：用户自然语言问题或控制指令。
 - `token`：场景 token，用于工具调用与发送执行请求。
-- `session_id`：会话标识，用于关联上下文与历史记录。
-- `sceneInfo`：场景配置、层级、主题、图层、图表、孪生体类别等信息。
-- `historyUser`：历史用户问题与历史指令内容。
-- `historyInter`：历史工具调用记录。
+- `scene_info`：场景配置、层级、主题、图层、图表、孪生体类别等信息。
+- `history_user`：历史用户问题与历史指令内容。
+- `history_inter`：历史工具调用记录。
 
-如果宿主系统没有提前注入 `sceneInfo`、`historyUser`、`historyInter`，可直接调用 [scripts/invoke_skill.py](scripts/invoke_skill.py)；脚本会自动完成会话缓存、场景信息拉取、工具调用、模型推理与指令发送。
+获取上下文的方式：
+
+1. 如需额外数据（如孪生体实例列表），运行：
+   ```
+   python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data --mcp-args '{"twinCategoryName": "类别名称"}'
+   ```
+2. AI 推理完成后，运行：
+   ```
+   python scripts/invoke_skill.py --token <token> --query "..." --agent-output "[指令串]"
+   ```
 
 ## Core Workflow
 
-### 1. 识别请求目标
+### 1. 获取场景上下文
+
+调用 `get_scene_context(token)`，获得：
+
+- `scene_info`：场景配置（层级名称、主题、图层、图表、孪生体类别等）
+- `history_user`：历史用户问题与对应指令内容
+- `history_inter`：历史 MCP 工具调用记录
+
+### 2. 识别请求目标
 
 先判断用户是在做哪一类事情：
 
@@ -57,48 +87,62 @@ description: This skill should be used when users need to convert Chinese natura
 - 主题切换/主题生成
 - 查询类问题
 
-### 2. 结合上下文推断参数
+### 3. 结合上下文推断参数
 
 解析需要参数的指令时，优先使用：
 
 1. 当前问题中的显式信息。
-2. `historyUser` 中最近一次相关操作。
-3. `historyInter` 中已有工具结果。
-4. `sceneInfo` 中可用名称列表。
+2. `history_user` 中最近一次相关操作。
+3. `history_inter` 中已有工具结果。
+4. `scene_info` 中可用名称列表。
 
-如果仍无法确认名称类参数，返回“场景中没有找到匹配的信息”及相关候选数据，并放入一组 `[]` 中直接输出，不伪造指令。
+如需额外数据（如某层级下的孪生体列表），运行：
 
-### 3. 生成标准指令串
+```
+python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data --mcp-args '{"twinCategoryName": "类别名称"}'
+```
 
-按孪易指令规范生成原始执行指令，格式示例：
+可用 MCP 工具：
+
+- `get_scene_info`：获取场景完整配置（层级、主题、孪生体类别等）
+- `get_twin_category_data`：按类别查实例名称列表，参数 `{"twinCategoryName": "XXX"}`
+- `get_twin_category`：按层级查该层所有孪生体类别，参数 `{"levelName": "XXX"}`
+- `get_all_environment`：获取所有环境监控对象
+- `query_environment_sensor_data`：查传感器数据，参数 `{"twinCategoryName": "XXX", "twinInstanceName": "XXX"}`
+
+如果仍无法确认名称类参数，返回"场景中没有找到匹配的信息"及相关候选数据，并放入一组 `[]` 中直接输出，不伪造指令，**此条规则非常重要，优先级最高**。
+
+### 4. 生成标准指令串
+
+按下方指令库规则生成原始执行指令，格式示例：
 
 - `[A03]`
-- `[A36：告警信息：当前&A38：告警信息选中]`
+- `[A36：告警信息：当前$A38：告警信息选中]`
 - `[A01：功能切换：分析$C01：主题切换：园区概况]`
 
-多指令按 `$` 连接；方括号中的并列片段按原有规范保留。
+多指令按 `$` 连接；并列操作按 `$` 拼接在同一方括号内。
 
-### 4. 生成用户可见计划文本
+### 5. 生成用户可见计划文本
 
 将原始指令转换为中文计划文本时：
 
 - 保留动作语义。
 - 去掉指令编码，如 `A03`、`B02`、`C01`。
-- 保留参数值，如“下一层”“摄像头01”“园区概况”。
+- 保留参数值，如"下一层""摄像头01""园区概况"。
 
 例如：
 
-- `A03` → `层级切换：下一层`
-- `A08：场景旋转：开始` → `场景旋转：开始`
-- `B07：打开灯：1F走廊灯` → `打开灯：1F走廊灯`
+- `A03` `层级切换：下一层`
+- `A08：场景旋转：开始` `场景旋转：开始`
+- `B07：打开灯：1F走廊灯` `打开灯：1F走廊灯`
 
 最终使用以下格式：
 
 `根据最优策略，已经为您规划如下执行计划：\n1、...\n2、...`
 
-查询类 `D01` 不加“规划如下执行计划”前缀，直接输出查询内容。
+查询类 `D01` 不加"规划如下执行计划"前缀，直接输出查询内容。
 
-### 5. 组织前端分段响应
+### 6. 组织前端分段响应
 
 始终按以下顺序拼接：
 
@@ -110,7 +154,7 @@ description: This skill should be used when users need to convert Chinese natura
 
 格式必须与既有系统兼容，具体结构见 [references/integration.md](references/integration.md)。
 
-### 6. 组织或发送 HTTP 执行请求
+### 7. 组织或发送 HTTP 执行请求
 
 需要执行时，按以下规则组织请求：
 
@@ -130,33 +174,53 @@ description: This skill should be used when users need to convert Chinese natura
 - `plan_text` 使用中文展示文本。
 - 不要把仅用于展示的文本替换掉原始执行指令。
 
-### 7. 执行层脚本
+### 8. 执行层脚本
 
-完整执行逻辑位于：
+**重要：你（加载本文件的 AI）负责推理生成指令串，然后你自己调用下方脚本完成执行。`--agent-output` 参数的值就是你在上一步生成的指令串（如 `[A03]`），由你填入并调用，不需要等待任何外部输入。**
 
-- [scripts/skill_runtime.py](scripts/skill_runtime.py)：工作流核心运行时，负责会话状态、MCP 工具调用、LLM tool calling、执行计划生成与 `SendInstruction` 调用。
-- [scripts/invoke_skill.py](scripts/invoke_skill.py)：命令行入口，适合被宿主系统、测试脚本或 API 包装层直接调用。
+执行层逻辑位于：
+
+- [scripts/skill_runtime.py](scripts/skill_runtime.py)：纯执行运行时，提供三个公开函数：`get_scene_context`、`call_mcp_tool`、`execute_command`。无 LLM 调用逻辑。
+- [scripts/invoke_skill.py](scripts/invoke_skill.py)：命令行入口，接收 `--agent-output` 并调用 `execute_command`。
 - [scripts/requirements.txt](scripts/requirements.txt)：当前执行脚本依赖。
 
-典型调用方式：
+调用方式（你生成指令后立即执行）：
 
-- `python scripts/invoke_skill.py --query "切换到下一层" --token "<scene-token>" --session-id "demo-session"`
+- `python scripts/invoke_skill.py --query "切换到下一层" --token "<scene-token>" --agent-output "[A03]"`
 - 如只想验证指令生成而不下发执行，可追加 `--no-execute`
 
 ## Output Requirements
 
 ### 用户可见文本
 
-必须：
+调用脚本执行后，脚本会返回一个 JSON 结果，其中包含 `plan_text` 字段。**必须直接把 `plan_text` 的内容作为最终回复展示给用户，不要自己另外编写回复内容。**
 
-- 不带指令编码。
-- 中文可读。
-- 与原工作流结果风格一致。
+例如脚本返回：
+
+```json
+{
+  "plan_text": "根据最优策略，已经为您规划如下执行计划：\n1、层级切换：上一层",
+  "execution_result": { "code": 10000, "msg": "成功" }
+}
+```
+
+则直接向用户输出：`根据最优策略，已经为您规划如下执行计划：\n1、层级切换：上一层`
+
+询问类（D01）示例：
+
+```json
+{
+  "plan_text": "为您查找到相关内容如下：大会议室摄像头2，后门入口摄像头；共2个"
+}
+```
+
+则直接向用户输出：`为您查找到相关内容如下：大会议室摄像头2，后门入口摄像头；共2个`
 
 禁止：
 
 - 输出 `A09`、`A03`、`B07` 这类裸编码给用户。
-- 把“开始/停止/名称”等参数留空。
+- 自行编写"已发送指令"、"请查看场景"等替代性描述，而不使用 `plan_text`。
+- 把"开始/停止/名称"等参数留空。
 
 ### 执行指令文本
 
@@ -165,15 +229,125 @@ description: This skill should be used when users need to convert Chinese natura
 - 保留完整编码。
 - 能直接用于 `SendInstruction`。
 
-## Command Handling Rules
+## 推理规则（AI 生成指令时遵循）
 
-处理命令时遵循：
+1. 根据用户输入内容，智能匹配并直接输出最符合上述指令格式的内容。
+2. 若用户输入中包含多个意图，一次输出多个对应指令。
+3. 对于括号中含有"其一"的选项，必须从已知选项中选择最匹配的一个。
+4. 对于括号中含有"名称"的选项，首先从 `history_inter` 中查找，没有再运行：
+   ```
+   python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data --mcp-args '{"twinCategoryName": "对应类别"}'
+   ```
+   从返回结果中匹配最接近的一个；如果经过查找仍没有匹配成功，拼接固定语句"场景中没有找到匹配的信息，"以及通过 MCP 接口查找到的相关数据，然后用一个 `[]` 括起来直接输出，且不拼接任何指令，**非常重要优先级最高**。
+5. 剩下的智能输出所需内容。
+6. 当用户输入"生成XXXX"、"统计XXX"、"创建XXX"、"分析XXX"、"统计一下XXX"等类似表达时，必须识别为"C02：主题生成：XXX"。
+7. 当用户输入询问类型的内容时（如"有哪些XXX"、"XXX有什么"），**必须按以下步骤完成，不得跳过**：
+   1. 运行：`python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data --mcp-args '{"twinCategoryName": "XXX类别名称"}'`，类别名称从 `scene_info.twinCategoryNames` 中匹配最接近的一个。
+   2. 将返回的所有实例名称填入 D01 指令，格式：`D01：名称1，名称2，名称3；共X个`
+   3. 运行：`python scripts/invoke_skill.py --token <token> --query "..." --agent-output "[D01：...]"`
+   4. 把脚本返回的 `plan_text` 展示给用户。
 
-- 无参数固定命令：直接转换为固定中文文本。
-- 带参数命令：必须从模型解析结果中读取参数，不在代码层伪造默认参数。
-- 查询类命令：直接输出查询结果，不走“规划执行计划”前缀。
+   **禁止**在未运行 MCP 查询脚本的情况下发送任何指令，或要求用户自己提供列表。
 
-完整指令说明见 [references/command-rules.md](references/command-rules.md)。
+8. 当用户输入跟聚焦对象和选中对象相关的问题时，对象名称存在时联系上下文，按以下三种情况严格判断：
+   - 情况一：对话开始、没有任何历史指令，**或历史指令中存在层级切换（A02/A03/A04/A05/A06）但不存在任何对象操作（B01/B02）** 输出必须包含"A02：层级切换：（对象所在层级）"；
+   - 情况二：上一个对象操作（B01/B02）与当前对象在同一层级，且两次对象操作之间的历史指令中不存在任何层级切换指令（A02、A03、A04、A05、A06） 只输出对象指令，不加层级切换；
+   - 情况三：上述情况二不满足时（即对象不同层级，或两次对象操作之间存在过 A02/A03/A04/A05/A06 中任意一条） 输出必须包含"A02：层级切换：（对象所在层级）"。
+
+   特别注意：判断"两次对象操作之间是否有层级切换"时，必须检查上一个对象指令之后到本次请求之间的所有历史指令，只要出现过 A02/A03/A04/A05/A06，就必须输出层级切换，即使当前对象与上一个对象处于同一层级。如果对象名称存在多个层级，默认用第一个出现的层级。
+
+9. 当用户询问有多少对象/孪生体且不带有某个层级时，应输出所有层级下的孪生体类型以及该类型下的对象名称。
+10. 当用户输入问题跟主题切换相关时，如果主题名称存在，输出的指令必须包含"A01：功能切换：分析$C01：主题切换：（主题名称）"。
+11. 当用户输入问题跟告警相关时：
+    - 看一下告警信息 `A36：告警信息：当前`
+    - 看一下最新的告警 `A36：告警信息：当前$A38：告警信息选中`
+    - 最新的历史告警 `A37：告警信息：历史$A38：告警信息选中`
+    - 查看告警触发截图 `A38：告警信息选中$A39：告警截图：打开`
+
+    注意根据上下文判断，如果上一个指令包括告警信息选中，则不用重复输出。
+
+12. 当用户输入问题是打开或关闭XXX灯开关时，对象名称直接从智能开关孪生体中获取，输出"B07：打开灯：（对象名称）"或"B08：关闭灯：（对象名称）"。
+13. 当用户输入问题是打开或关闭XXX温控器或者XXX空调时，对象名称直接从温控器孪生体中获取，输出"B09：打开温控器：（对象名称）"或"B10：关闭温控器：（对象名称）"。
+
+### 特别注意事项
+
+1. 对用户输入进行模糊匹配，例如"园区概览""园区概况"视为同义。
+2. 当用户输入包含多个操作（如"切换到第八层并选中摄像头01"），分别输出多个指令（如：`A02：层级切换：楼层8$B02：选中对象：摄像头01`）。
+3. 当用户输入"切换主题到园区""切换到园区主题""切换园区"等类似表达时，也应识别为"A01：功能切换：分析$C01：主题切换：园区概况"。
+4. 对象上卷和对象下钻是不同的指令集，跟层级切换无关。
+5. 不需要输出思考过程，不要询问用户任何问题，直接按照输出格式输出正确结果。
+
+## 指令库
+
+```
+A01：功能切换：？（AI分析、分析、对象、告警、过滤 其一）
+A02：层级切换：？（层级名称，必须是从工具接口中返回的内容）
+A03：层级切换：下一层
+A04：层级切换：上一层
+A05：层级切换：第一层
+A06：层级切换：最后一层
+A07：层级列表：？（打开、关闭 其一）
+A08：场景旋转：？（开始、停止 其一）
+A09：场景复位
+A10：视野放缩：拉近，100
+A10：视野放缩：远离，100
+A11：视野平移：？（前移、后移、左移、右移 其一），100
+A12：视野旋转：？（顺时针、逆时针 其一），10
+A13：时间轴：播放
+A14：时间轴：暂停
+A15：时间轴：跳转到？（时间点或关键锚点）
+A16：时间轴：？（回放、实时 其一）
+A17：图层管理：？（打开、关闭 其一）
+A18：显示图层：？（图层名称，必须是从工具接口中返回的内容）
+A19：隐藏图层：？（图层名称，必须是从工具接口中返回的内容）
+A20：图层全部显示
+A21：图层全部隐藏
+A22：图表管理：？（打开、关闭 其一）
+A23：显示图表：？（图表名称，必须是从工具接口中返回的内容）
+A24：关闭图表：？（图表名称，必须是从工具接口中返回的内容）
+A25：环境控制：？（打开、关闭 其一）
+A26：时间切换：？（具体时间点）
+A27：季节切换：？（春季、夏季、秋季、冬季 其一）
+A28：天气切换：？（晴、晴间多云、阴天、小雨、中雨、大雨、小雪、中雪、大雪、雾、霾、扬沙 其一）
+A29：演示汇报：？（打开、关闭 其一）
+A30：开始演示：？（演示汇报名称，必须是从工具接口中返回的内容）
+A31：停止演示
+A32：暂停演示
+A33：上一步演示
+A34：下一步演示
+A35：重新演示
+A36：告警信息：当前
+A37：告警信息：历史
+A38：告警信息选中
+A39：告警截图：（打开、关闭 其一）
+B01：聚焦对象：？（对象名称，必须是从工具接口中返回的内容）
+B02：选中对象：？（对象名称，必须是从工具接口中返回的内容）
+B03：取消选中
+B04：对象下钻
+B05：对象上卷
+B06：搜索对象：？（搜索内容）
+B07：打开灯：？（对象名称，必须是从工具接口中返回的内容）
+B08：关闭灯：？（对象名称，必须是从工具接口中返回的内容）
+B09：打开温控器：？（对象名称，必须是从工具接口中返回的内容）
+B10：关闭温控器：？（对象名称，必须是从工具接口中返回的内容）
+C01：主题切换：？（主题名称，必须是从工具接口中返回的内容）
+C02：主题生成：？（生成的内容）
+D01：？，？，？；共X个（询问类内容）
+```
+
+## 输出格式
+
+```
+[指令1$指令2$指令3$...]
+```
+
+## 输出示例
+
+1. 用户有两个意图：`[A02：层级切换：楼层8$B02：选中对象：摄像头01]`
+2. 用户只有一个意图：`[A04：层级切换：上一层]`
+3. 用户有多个询问类意图：`[D01：摄像头01，摄像头02，摄像头03；共3个$D01：告警01，告警02；共2个]`
+4. 选中摄像头01：`[A02：层级切换：层级2$B02：选中对象：摄像头01]`
+5. 情况三示例：上一个对象操作是聚焦传感器10（楼层20），之后执行了"A04：层级切换：上一层"，再聚焦传感器8（楼层20） 两次对象操作之间存在A04，必须输出层级切换：`[A02：层级切换：楼层20$B01：聚焦对象：传感器8]`
 
 ## Failure Handling
 
@@ -197,8 +371,8 @@ description: This skill should be used when users need to convert Chinese natura
 
 ### scripts/skill_runtime.py
 
-存放与原工作流等价的可执行实现。
+纯执行层运行时，公开三个函数：`get_scene_context`、`call_mcp_tool`、`execute_command`。
 
 ### scripts/invoke_skill.py
 
-提供可直接调用的命令行入口。
+命令行入口，接收 `--agent-output` 参数调用 `execute_command`。

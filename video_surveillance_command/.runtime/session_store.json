@@ -10,6 +10,46 @@
       {
         "question": "视频矩阵二乘二",
         "content": "E02：筛选：设置显示模式，2×2"
+      },
+      {
+        "question": "视频放大",
+        "content": "E32：单路云台：拉近"
+      },
+      {
+        "question": "视频放大",
+        "content": "E32：单路云台：拉近"
+      },
+      {
+        "question": "视频放大",
+        "content": "E32：单路云台：拉近"
+      },
+      {
+        "question": "视频放大",
+        "content": "E32：单路云台：拉近"
+      },
+      {
+        "question": "视频放大",
+        "content": "E32：单路云台：拉近"
+      },
+      {
+        "question": "视频矩阵切换到3X3",
+        "content": "E02：筛选：设置显示模式，33"
+      },
+      {
+        "question": "???????3X3",
+        "content": "E02???????????3×3"
+      },
+      {
+        "question": "视频矩阵切换到3X3",
+        "content": "E02：筛选：设置显示模式，3×3"
+      },
+      {
+        "question": "视频矩阵切换到3X3",
+        "content": "E02：筛选：设置显示模式，3×3"
+      },
+      {
+        "question": "视频矩阵切换到3X3",
+        "content": "E02：筛选：设置显示模式，3×3"
       }
     ],
     "history_inter": [
@@ -117,6 +157,6 @@
     ],
     "mcp_session_id": "eALDpRveYRxuoymKTaRUxA",
     "mcp_initialized": true,
-    "updated_at": 1773217550.868064
+    "updated_at": 1773297809.6479213
   }
 }
