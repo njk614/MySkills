@@ -11,10 +11,9 @@ from typing import Any
 import httpx
 
 
-SKILL_NAME = "video_surveillance_assistant"
+SKILL_NAME = "video_surveillance_command"
 DEFAULT_USER = os.getenv("SKILL_DEFAULT_USER", "skill-client")
 HTTP_TIMEOUT = float(os.getenv("SKILL_HTTP_TIMEOUT", "120"))
-GREETING_MESSAGE = "您好我是视频监控助手，正在执行任务，请稍等~"
 DEFAULT_LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
 DEFAULT_LLM_API_KEY = os.getenv("LLM_API_KEY", "sk-6b59cbb200344af584cff9e66af1f413")
 DEFAULT_MCP_BASE_URL = os.getenv("TWINEASY_MCP_BASE_URL", "http://test.twinioc.net/api/editor/mcp").rstrip("/")
@@ -715,18 +714,6 @@ def _build_execution_plan(agent_text: str) -> tuple[str, str]:
     return final_result, instruction_order
 
 
-def _build_raw_answer(plan_text: str) -> str:
-    greeting = '{\n"response": "' + GREETING_MESSAGE.replace('"', '\\"') + '"\n}'
-    plan = '{\n"response": "' + plan_text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"\n}'
-    return f"{greeting}THISSECTIONEND{plan}THISSECTIONEND\nAGENTEND"
-
-
-def _build_response_content(plan_text: str) -> str:
-    greeting = '{\n"response": "' + GREETING_MESSAGE.replace('"', '\\"') + '"\n}'
-    plan = '{\n"response": "' + plan_text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"\n}'
-    return f"{greeting}THISSECTIONEND{plan}THISSECTIONEND"
-
-
 def _build_json_data(query: str, instruction_order: str, plan_text: str) -> str:
     return f"{instruction_order}$&{query}$&{plan_text}"
 
@@ -815,7 +802,6 @@ async def invoke_skill(
         if execute_instruction and instruction_order:
             send_result = await _send_instruction(client, token, query, instruction_order, plan_text)
 
-    raw_answer = _build_raw_answer(plan_text)
     return {
         "skill_name": SKILL_NAME,
         "success": True,
@@ -823,6 +809,5 @@ async def invoke_skill(
         "agent_text": agent_text,
         "instruction_order": instruction_order,
         "plan_text": plan_text,
-        "raw_answer": raw_answer,
         "send_result": send_result,
     }

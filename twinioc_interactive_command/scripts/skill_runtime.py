@@ -11,10 +11,9 @@ from typing import Any
 import httpx
 
 
-SKILL_NAME = "luanyi_interactive_assistant"
+SKILL_NAME = "twinioc_interactive_command"
 DEFAULT_USER = os.getenv("SKILL_DEFAULT_USER", "skill-client")
 HTTP_TIMEOUT = float(os.getenv("SKILL_HTTP_TIMEOUT", "120"))
-GREETING_MESSAGE = "您好我是孪易交互助手，正在执行任务，请稍等~"
 DEFAULT_LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
 DEFAULT_LLM_API_KEY = os.getenv("LLM_API_KEY", "sk-6b59cbb200344af584cff9e66af1f413")
 DEFAULT_MCP_BASE_URL = os.getenv("TWINEASY_MCP_BASE_URL", "http://test.twinioc.net/api/editor/mcp").rstrip("/")
@@ -65,7 +64,7 @@ BUILTIN_AGENT_PROMPT = """# 你的目标
 1. 请根据用户的输入内容，智能匹配并直接输出最符合上述指令格式的内容。
 2. 若用户输入中包含多个意图，请一次输出多个对应指令。
 3. 对于括号中含有“其一”的选项，必须从已知选项中选择最匹配的一个。
-4. 对于括号中含有“名称”的选项，首先从MCP接口调用历史中查找，没有再调用MCP接口获取的信息中选择最匹配的一个，如果经过查找仍没有匹配成功，拼接固定语句“场景中没有找到匹配的信息，”以及通过MCP接口查找到的与问题相关的数据信息，然后用一个[]都括起来直接输出，且不用拼接任何指令。
+4. 对于括号中含有"名称"的选项，首先从MCP接口调用历史中查找，没有再调用MCP接口获取的信息中选择最匹配的一个，如果经过查找仍没有匹配成功，拼接固定语句"场景中没有找到匹配的信息，"以及通过MCP接口查找到的与问题相关的数据信息，然后用一个[]都括起来直接输出，且不用拼接任何指令，非常重要优先级最高。
 5. 剩下的智能输出所需的内容。
 6. 当用户输入“生成XXXX”、“统计XXX”、“创建XXX”、“分析XXX”、“统计一下XXX”等类似表达时，必须识别为“C02：主题生成：XXX”。
 7. 当用户输入询问类型的内容时，输出：D01：？，？，？；共X个，其中？代表查询的名称，需要把所有内容输出，然后X是统计的个数。
@@ -74,6 +73,7 @@ BUILTIN_AGENT_PROMPT = """# 你的目标
    - 情况二：上一个对象操作（B01/B02）与当前对象在同一层级，且两次对象操作之间的历史指令中不存在任何层级切换指令（A02、A03、A04、A05、A06）→ 只输出对象指令，不加层级切换；
    - 情况三：上述情况二不满足时（即对象不同层级，或两次对象操作之间存在过A02/A03/A04/A05/A06中任意一条）→ 输出必须包含"A02：层级切换：（对象所在层级）"。
    特别注意：判断"两次对象操作之间是否有层级切换"时，必须检查上一个对象指令之后到本次请求之间的所有历史指令，只要出现过A02/A03/A04/A05/A06，就必须输出层级切换，即使当前对象与上一个对象处于同一层级。
+   如果对象名称存在多个层级，默认用第一个出现的层级。
 9. 当用户询问有多少对象/孪生体且不带有某个层级时；应该输出所有层级下的孪生体类型以及该类型下的对象名称。
 10. 当用户输入问题跟主题切换相关的，如果主题名称存在，输出的指令必须包含“A01：功能切换：分析$C01：主题切换：（主题名称）”。
 11. 当用户输入问题跟告警相关时，如看一下告警信息，则输出“A36：告警信息：当前”；如看一下最新的告警，则输出“A36：告警信息：当前&A38：告警信息选中”；如最新的历史告警，则输出“A37：告警信息：历史&A38：告警信息选中”；如果是查看告警触发截图，则输出“A38：告警信息选中&A39：告警截图：打开”。注意根据上下文判断，如果上一个指令包括告警信息选中的指令，则不用重复输出多个指令。
@@ -762,18 +762,6 @@ def _build_execution_plan(agent_text: str) -> tuple[str, str]:
     return final_result, instruction_order
 
 
-def _build_raw_answer(plan_text: str) -> str:
-    greeting = '{\n"response": "' + GREETING_MESSAGE.replace('"', '\\"') + '"\n}'
-    plan = '{\n"response": "' + plan_text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"\n}'
-    return f"{greeting}THISSECTIONEND{plan}THISSECTIONEND\nAGENTEND"
-
-
-def _build_response_content(plan_text: str) -> str:
-    greeting = '{\n"response": "' + GREETING_MESSAGE.replace('"', '\\"') + '"\n}'
-    plan = '{\n"response": "' + plan_text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n') + '"\n}'
-    return f"{greeting}THISSECTIONEND{plan}THISSECTIONEND"
-
-
 def _build_json_data(query: str, instruction_order: str, plan_text: str) -> str:
     return f"{instruction_order}$&{query}$&{plan_text}"
 
@@ -851,7 +839,6 @@ async def invoke_skill(
             agent_text, tool_calls = await _run_agent(client, query, token, session, llm_model or DEFAULT_LLM_MODEL)
             plan_text, instruction_order = _build_execution_plan(agent_text)
             json_data = _build_json_data(query, instruction_order, plan_text)
-            response_content = _build_response_content(plan_text)
 
             execution_result: Any = None
             if execute_instruction and instruction_order:
@@ -863,7 +850,6 @@ async def invoke_skill(
 
             result = {
                 "jsonData": json_data,
-                "response": response_content,
             }
             if execute_instruction:
                 result["execution_result"] = execution_result
@@ -882,7 +868,6 @@ async def invoke_skill(
                         "history_user_count": len(session.history_user),
                         "history_inter_count": len(session.history_inter),
                     },
-                    "raw_answer": _build_raw_answer(plan_text),
                     "tool_calls": tool_calls,
                 }
             return result

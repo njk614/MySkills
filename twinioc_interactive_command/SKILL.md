@@ -1,5 +1,5 @@
 ---
-name: luanyi-interactive-assistant
+name: twinioc-interactive-command
 description: This skill should be used when users need to convert Chinese natural-language TwinEasy scene interaction requests into executable command sequences, produce segmented response text compatible with the existing front-end format, and prepare or send the SendInstruction HTTP payload.
 ---
 
