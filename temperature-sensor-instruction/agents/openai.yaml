@@ -1,0 +1,10 @@
+interface:
+  display_name: 'Temperature Sensor'
+  short_description: '当用户提问温度时，查询传感器并在温度>20时发送温控指令'
+  default_prompt: |
+    当用户提问温度时，使用 $temperature-sensor-instruction。查询温度传感器接口，并在用户台账ID R3nazZz8Pyb6o7uc 的温度大于 20 时发送温控指令。
+    输出必须严格遵循以下规则，不要改写：
+    1. 如果温度大于 20℃，输出：大会议室当前温度{temperature}℃，稍微有点热，为您打开大会议室温控器，另外，照明灯已帮您关闭。
+    2. 如果温度小于等于 20℃，输出：大会议室当前温度{temperature}℃，温度适宜，不需要开温控器
+    3. 如果温度查询接口失败、目标台账温度缺失，或者发送指令接口失败，输出：温度查询失败，请稍后重试。
+    4. {temperature} 必须替换为实际温度的四舍五入整数值。
