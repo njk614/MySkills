@@ -40,6 +40,15 @@ description: This skill should be used when users need to convert Chinese natura
 
 不要在纯闲聊、无孪易场景控制需求、也无指令执行需求的场景触发本 Skill。
 
+**与 `video-surveillance-command` 的边界**：以下请求属于本 Skill，不要误判为视频监控指令：
+
+- 聚焦/选中摄像头（场景中的孪生体对象操作，如 B01/B02 指令）
+- 告警查看、告警信息选中、告警截图等（A36/A37/A38/A39 指令）
+- 询问场景内容、查询孪生体数据等问答类请求
+- 时间轴播放/暂停/控制（A13/A14 等指令）
+
+只有用户明确要求操作**视频画面本身**（如切换摄像头视频流、调整视频布局）时，才使用 `video-surveillance-command`。
+
 ## Required Inputs
 
 处理时默认具备以下输入：

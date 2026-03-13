@@ -503,12 +503,12 @@ def _expand_instruction_order(instruction_order: str) -> str:
     return "$".join(expanded)
 
 
-def _build_json_data(instruction_order: str, plan_text: str) -> str:
-    return f"{_expand_instruction_order(instruction_order)}$&{plan_text}"
+def _build_json_data(instruction_order: str, query: str, plan_text: str) -> str:
+    return f"{_expand_instruction_order(instruction_order)}$&{query}$&{plan_text}"
 
 
 async def _send_instruction(client: httpx.AsyncClient, token: str, query: str, instruction_order: str, plan_text: str) -> Any:
-    json_data = _build_json_data(instruction_order, plan_text)
+    json_data = _build_json_data(instruction_order, query, plan_text)
     response = await client.post(
         f"{DEFAULT_TWINEASY_SERVER_URL}/v1/location/SendInstruction",
         headers={"Content-Type": "application/json", "Accept": "text/plain"},
@@ -632,7 +632,7 @@ async def execute_command(
         raise SkillRuntimeError("agent_output 不能为空")
 
     plan_text, instruction_order = _build_execution_plan(agent_output)
-    json_data = _build_json_data(instruction_order, plan_text)
+    json_data = _build_json_data(instruction_order, query, plan_text)
 
     execution_result: Any = None
     if execute_instruction and instruction_order:
