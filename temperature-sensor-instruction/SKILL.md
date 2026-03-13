@@ -1,6 +1,6 @@
 ---
 name: temperature-sensor-instruction
-description: Query the temperature sensor API when the user asks about temperature or 温度, read the temperature for ledger ID R3nazZz8Pyb6o7uc, and send a control instruction when the temperature is above 20℃.
+description: Query the temperature sensor API when the user asks about temperature or 温度, resolve user input to a device by 安装位置/孪生体实例名称 from data_organized.json, read the matched 用户台账ID temperature, and reply with the current temperature.
 ---
 
 # Temperature Sensor Instruction
@@ -9,45 +9,51 @@ Use this skill when the user asks about temperature or 温度.
 
 ## Output Constraints
 
-The assistant must follow the fixed output templates below and must not paraphrase, expand, or rewrite them.
+The assistant must follow the output rules below.
 
-1. If the measured temperature is greater than 20℃, output exactly:
-
-```text
-大会议室当前温度{temperature}℃，稍微有点热，为您打开大会议室温控器，另外，照明灯已帮您关闭。
-```
-
-2. If the measured temperature is less than or equal to 20℃, output exactly:
+1. After successfully reading the temperature, reply in this pattern:
 
 ```text
-大会议室当前温度{temperature}℃，温度适宜，不需要开温控器
+{device}当前温度{temperature}℃
 ```
 
-3. If the temperature query API fails, the target ledger temperature is missing, or the SendInstruction API fails, output exactly:
+2. If the temperature query API fails, the target ledger temperature is missing, output exactly:
 
 ```text
 温度查询失败，请稍后重试。
 ```
 
-4. `{temperature}` must be replaced with the actual measured temperature rounded to the nearest integer.
+3. If the user input matches no device:
+
+```text
+设备不存在。
+```
+
+4. If the user input is a location and no device exists there:
+
+```text
+当前位置没有设备。
+```
+
+5. If the user input matches multiple devices with the same confidence, output exactly:
+
+```text
+当前位置存在多个设备，请提供更具体的孪生体实例名称。
+```
+
+6. `{temperature}` must be replaced with the actual measured temperature value (keep decimals when present).
+7. `{device}` must be the matched device display name (prefer 安装位置).
 
 ## Workflow
 
 1. Call the temperature API:
    POST /public/location/{locationID}/twinTypeDistinguish/TwinTimeSeries/batchQueryData
-2. Query the target ledger ID:
-   R3nazZz8Pyb6o7uc
-3. Read the temperature value from the response table.
-4. If temperature is above 20℃, call:
-   POST /location/SendInstruction
-5. If the query does not return the target ledger temperature immediately, retry the temperature query before failing.
-6. Return a user-facing reply message.
-7. Send the fixed instruction payload below when the hot branch is triggered:
-
-```text
-B09：关闭温控器：大会议室温控器$&打开温控器：大会议室温控器$&根据最优策略，已经为您规划如下执行计划：
-1、关闭温控器：大会议室温控器
-```
+2. Load `data_organized.json` and resolve user input to a target 用户台账ID.
+   - Input may be 安装位置 or 孪生体实例名称.
+   - If no match, return `设备不存在。` or `当前位置没有设备。`.
+3. Read the matched ledger temperature value from the response table.
+4. If the query does not return the target ledger temperature immediately, retry the temperature query before failing.
+5. Assess the temperature and return a user-facing reply following the Output Constraints above.
 
 ## Configuration
 
@@ -58,7 +64,8 @@ B09：关闭温控器：大会议室温控器$&打开温控器：大会议室温
 - Temperature query level ID: gez4ermd715t31le
 - Twin category config ID: hcwn2ha6p49661rm
 - Target ledger ID: R3nazZz8Pyb6o7uc
-- Temperature threshold: 20.0
+- Device catalog file: temperature-sensor-instruction/data_organized.json
+- SendInstruction location placeholder: `__INSTALL_LOCATION__`
 - Default maximum query attempts: 5
 - Default retry interval: 1.0 second
 
@@ -84,8 +91,15 @@ B09：关闭温控器：大会议室温控器$&打开温控器：大会议室温
   Default: dyo6vaow6203kx09
 
 - --target-ledger-id
-  Ledger ID whose temperature is used for the decision.
+  Fallback ledger ID when `--device-query` is not provided.
   Default: R3nazZz8Pyb6o7uc
+
+- --device-query
+  User input to resolve device by 安装位置 or 孪生体实例名称.
+
+- --device-data-file
+  Path to `data_organized.json`.
+  Default: `temperature-sensor-instruction/data_organized.json`
 
 - --threshold
   Temperature threshold for sending control instructions.
@@ -93,23 +107,23 @@ B09：关闭温控器：大会议室温控器$&打开温控器：大会议室温
   Default: 20.0
 
 - --start-time
-  Query window start time.
+  Reserved parameter (backward compatibility).
   Format: YYYY-MM-DD HH:MM:SS
-  Default: current local time minus 1 second.
+  Not sent to batchQueryData request body.
 
 - --end-time
-  Query window end time.
+  Reserved parameter (backward compatibility).
   Format: YYYY-MM-DD HH:MM:SS
-  Default: current local time.
+  Not sent to batchQueryData request body.
 
 - --timeout
   HTTP timeout in seconds for both query and send operations.
-  Default: 10.0
+  Default: 100.0
 
 - --max-attempts
   Maximum number of temperature query attempts.
   Default: 5
-  When `--start-time` and `--end-time` are omitted, each retry recalculates the query window and increases the lookback range by 1 second.
+  Retries repeat the same request body without `conditonTime`.
 
 - --retry-interval
   Delay in seconds between temperature query retries.
@@ -128,7 +142,6 @@ B09：关闭温控器：大会议室温控器$&打开温控器：大会议室温
 - If the query fails, the target ledger temperature is missing, or SendInstruction fails, the script returns:
 
 Before the script gives up, it retries temperature queries because the sensor may not publish data every second.
-When `--start-time` and `--end-time` are not provided, retry attempt windows expand like this: `[-1s, now]`, `[-2s, now]`, `[-3s, now]`, and so on until the maximum attempt count is reached.
 
 - If the query still fails after all retries, the target ledger temperature is still missing, or SendInstruction fails, the script returns:
 
@@ -137,27 +150,51 @@ When `--start-time` and `--end-time` are not provided, retry attempt windows exp
 ```
 
 - If temperature is greater than 20℃, the script returns the hot reply template and sends the instruction unless --dry-run is enabled.
+  Before SendInstruction, `jsonData` is rendered dynamically using matched installation location.
 
 - If temperature is less than or equal to 20℃, the script returns the normal reply template and does not send any instruction.
+
+- If device matching fails, the script returns:
+  - `设备不存在。` or
+  - `当前位置没有设备。`
+  - `当前位置存在多个设备，请提供更具体的孪生体实例名称。`
 
 ## Reply Templates
 
 - Temperature above 20℃:
 
 ```text
-大会议室当前温度{temperature}℃，稍微有点热，为您打开大会议室温控器，另外，照明灯已帮您关闭。
+{device}当前温度{temperature}℃，稍微有点热，为您打开{device}温控器，另外，照明灯已帮您关闭。
 ```
 
 - Temperature less than or equal to 20℃:
 
 ```text
-大会议室当前温度{temperature}℃，温度适宜，不需要开温控器
+{device}当前温度{temperature}℃，温度适宜，不需要开温控器
 ```
 
 - API failure reply:
 
 ```text
 温度查询失败，请稍后重试。
+```
+
+- Device not found reply:
+
+```text
+设备不存在。
+```
+
+- No device at location reply:
+
+```text
+当前位置没有设备。
+```
+
+- Ambiguous location/device reply:
+
+```text
+当前位置存在多个设备，请提供更具体的孪生体实例名称。
 ```
 
 ## Scripts
@@ -182,6 +219,12 @@ Run without sending instructions:
 python temperature-sensor-instruction/scripts/check_temperature.py --dry-run
 ```
 
+Run with dynamic location resolution:
+
+```powershell
+python temperature-sensor-instruction/scripts/check_temperature.py --dry-run --device-query "小会议室"
+```
+
 Run with explicit parameters:
 
 ```powershell
@@ -189,9 +232,10 @@ python temperature-sensor-instruction/scripts/check_temperature.py \
   --token gj6mxa \
    --base-url http://test.twinioc.net/api/editor/v1 \
    --location-id dyo6vaow6203kx09 \
+   --device-query "大会议室" \
    --target-ledger-id R3nazZz8Pyb6o7uc \
    --threshold 20 \
    --start-time "2026-03-12 09:20:00" \
    --end-time "2026-03-12 09:25:30" \
-   --timeout 10
+   --timeout 100
 ```

@@ -10,7 +10,6 @@ from temperature_checker import (
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_RETRY_INTERVAL,
     TARGET_LEDGER_ID,
-    TRIGGER_THRESHOLD,
     check_and_send,
 )
 
@@ -28,15 +27,19 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://test.twinioc.net/api/editor/v1", help="API base URL.")
     parser.add_argument("--location-id", default="dyo6vaow6203kx09", help="Location ID.")
     parser.add_argument(
-        "--target-ledger-id",
-        default=TARGET_LEDGER_ID,
-        help=f"Target user ledger ID (default: {TARGET_LEDGER_ID}).",
+        "--device-query",
+        default=None,
+        help="User input used to match device by 安装位置 or 孪生体实例名称.",
     )
     parser.add_argument(
-        "--threshold",
-        type=float,
-        default=TRIGGER_THRESHOLD,
-        help=f"Temperature threshold (default: {TRIGGER_THRESHOLD}).",
+        "--device-data-file",
+        default=None,
+        help="Path to data_organized.json for device matching.",
+    )
+    parser.add_argument(
+        "--target-ledger-id",
+        default=TARGET_LEDGER_ID,
+        help=f"Fallback target user ledger ID when --device-query is missing (default: {TARGET_LEDGER_ID}).",
     )
     parser.add_argument("--start-time", default=None, help="Query start time (format: YYYY-MM-DD HH:MM:SS).")
     parser.add_argument("--end-time", default=None, help="Query end time (format: YYYY-MM-DD HH:MM:SS).")
@@ -53,7 +56,7 @@ def main() -> int:
         default=DEFAULT_RETRY_INTERVAL,
         help=f"Seconds to wait between retries (default: {DEFAULT_RETRY_INTERVAL}).",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Simulate sending instruction without actual API call.")
+    parser.add_argument("--dry-run", action="store_true", help="(disabled) Simulate sending instruction without actual API call.")
     parser.add_argument("--quiet", action="store_true", help="Suppress verbose output.")
 
     args = parser.parse_args()
@@ -68,14 +71,14 @@ def main() -> int:
         base_url=args.base_url,
         location_id=args.location_id,
         target_ledger_id=args.target_ledger_id,
-        threshold=args.threshold,
+        device_query=args.device_query,
+        device_data_file=args.device_data_file,
         start_time=args.start_time,
         end_time=args.end_time,
         timeout=args.timeout,
         max_attempts=args.max_attempts,
         retry_interval=args.retry_interval,
         verbose=not args.quiet,
-        dry_run=args.dry_run,
     )
 
     if not args.quiet and reply_message:
