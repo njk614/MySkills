@@ -21,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mcp-args", default="{}", help="MCP 工具参数 JSON 字符串，如 '{\"twinCategoryName\": \"可控摄像头\"}'")
     # 执行指令模式
     parser.add_argument("--query", help="用户输入的自然语言指令")
-    parser.add_argument("--agent-output", help="AI 已生成的指令串，如 [A02：层级切换：楼层8$B02：选中对象：摄像头01]")
+    parser.add_argument("--agent-output", help="AI 已生成的指令串，如 [A02：层级切换：楼层8&B02：选中对象：摄像头01]")
     parser.add_argument("--no-execute", action="store_true", help="只生成指令与展示文本，不调用 SendInstruction")
     parser.add_argument("--debug", action="store_true", help="输出调试信息")
     return parser.parse_args()

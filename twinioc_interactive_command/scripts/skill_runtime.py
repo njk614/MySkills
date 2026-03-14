@@ -622,7 +622,7 @@ async def execute_command(
     """接收 Copilot 已生成的指令串（agent_output），执行 SendInstruction 并保存对话历史。
 
     agent_output 应为 Copilot 按照 SKILL.md 中指令库规则生成的原始文本，
-    例如 "[A02：层级切换：楼层8$B02：选中对象：摄像头01]"。
+    例如 "[A02：层级切换：楼层8&B02：选中对象：摄像头01]"。
     """
     if not token:
         raise SkillRuntimeError("token 不能为空")
