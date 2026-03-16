@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for operation-logger skill."""
+"""Entry point for operation-rule-recorder skill."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from operation_logger import (  # noqa: E402
+from operation_rule_recorder import (  # noqa: E402
     DEFAULT_LOG_FILE,
     format_as_csv,
     query_records,
@@ -21,7 +21,7 @@ from operation_logger import (  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Operation logger — write or query interaction history.")
+    parser = argparse.ArgumentParser(description="Operation rule recorder — write or query rule records.")
 
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="Write a new log record.")
@@ -32,11 +32,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--source",
         default=None,
-        choices=["alarm", "temperature"],
-        help="Trigger source: alarm or temperature.",
+        choices=["alarm", "temperature", "schedule"],
+        help="Trigger source: alarm, temperature, or schedule.",
     )
     parser.add_argument("--query", dest="user_query", default=None, help="User input text.")
-    parser.add_argument("--instruction", default="", help="AI-generated Chinese execution plan (plan_text).")
 
     # query params
     parser.add_argument("--date", default=None, help="Filter by date YYYY-MM-DD.")
@@ -70,7 +69,6 @@ def main() -> int:
                 token=args.token,
                 source=args.source or "alarm",
                 query=args.user_query,
-                instruction=args.instruction,
                 log_file=log_file,
             )
             print(json.dumps({"success": True, "record": record}, ensure_ascii=False, indent=2))

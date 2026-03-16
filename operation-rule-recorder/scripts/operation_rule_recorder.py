@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operation logger core — write and query interaction history."""
+"""Operation rule recorder core — write and query rule records."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_LOG_FILE = Path(__file__).resolve().parent.parent / ".logs" / "operations.jsonl"
-VALID_SOURCES = {"alarm", "temperature"}
-MAX_RECORDS_PER_SOURCE = 20
+VALID_SOURCES = {"alarm", "temperature", "schedule"}
+MAX_RECORDS_PER_SOURCE = 100
 
 
 def utc_iso(dt: datetime) -> str:
@@ -27,7 +27,6 @@ def write_record(
     token: str,
     source: str,
     query: str,
-    instruction: str,
     log_file: Path = DEFAULT_LOG_FILE,
 ) -> dict[str, Any]:
     if not token:
@@ -42,7 +41,6 @@ def write_record(
         "source": source,
         "token": token,
         "query": query,
-        "instruction": instruction,
     }
 
     _ensure_log_dir(log_file)
@@ -96,7 +94,7 @@ def query_records(
     last: int | None = None,
     log_file: Path = DEFAULT_LOG_FILE,
 ) -> list[dict[str, Any]]:
-    """Query log records with optional filters.
+    """Query rule records with optional filters.
 
     Args:
         token: filter by scene token.
@@ -122,7 +120,7 @@ def query_records(
 def format_as_csv(records: list[dict[str, Any]]) -> str:
     if not records:
         return ""
-    fieldnames = ["time", "source", "query", "instruction"]
+    fieldnames = ["time", "source", "query"]
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()

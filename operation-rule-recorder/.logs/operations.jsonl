@@ -1,0 +1,4 @@
+{"time": "2026-03-16T07:02:53Z", "source": "temperature", "token": "test001", "query": "当大会议室温度大于20度时 打开大会议室温控器"}
+{"time": "2026-03-16T07:08:48Z", "source": "temperature", "token": "test001", "query": "当大会议室温度大于25度时 打开大会议室温控器"}
+{"time": "2026-03-16T07:10:47Z", "source": "alarm", "token": "test001", "query": "当产生告警时，聚焦到告警对象，同时关闭大会议室灯开关，视频列表布局切换成3X3"}
+{"time": "2026-03-16T07:12:20Z", "source": "schedule", "token": "test001", "query": "起一个定时器 5分钟查询看一下大会议室的温度"}
