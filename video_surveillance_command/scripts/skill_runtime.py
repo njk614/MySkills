@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -504,6 +505,7 @@ async def _send_instruction(
     plan_text: str,
 ) -> Any:
     json_data = _build_json_data(instruction_order, plan_text)
+    await asyncio.sleep(1)
     response = await client.post(
         f"{DEFAULT_TWINEASY_SERVER_URL}/v1/location/SendInstruction",
         headers={"Content-Type": "application/json", "Accept": "text/plain"},
