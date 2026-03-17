@@ -51,7 +51,10 @@ async def main() -> int:
             execute_instruction=not args.no_execute,
             debug=args.debug,
         )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if args.debug:
+            import sys
+            print(json.dumps(result, ensure_ascii=False, indent=2), file=sys.stderr)
+        print(result.get("plan_text", ""))
         return 0
     except SkillRuntimeError as exc:
         print(

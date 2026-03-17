@@ -13,8 +13,6 @@
 
 ```text
 {
-"response": "您好我是视频监控助手，正在执行任务，请稍等~"
-}THISSECTIONEND{
 "response": "根据最优策略，已经为您规划如下执行计划：\n1、视频：下一个视频"
 }THISSECTIONEND
 AGENTEND
@@ -24,11 +22,9 @@ AGENTEND
 
 按固定顺序输出：
 
-1. 问候 JSON
+1. 计划结果 JSON
 2. `THISSECTIONEND`
-3. 计划结果 JSON
-4. `THISSECTIONEND`
-5. 换行后 `AGENTEND`
+3. 换行后 `AGENTEND`
 
 ## HTTP 执行请求
 

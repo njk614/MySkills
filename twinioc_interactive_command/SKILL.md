@@ -116,10 +116,7 @@ python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data
 - `get_scene_info`：获取场景完整配置（层级、主题、孪生体类别等）
 - `get_twin_category_data`：按类别查实例名称列表，参数 `{"twinCategoryName": "XXX"}`
 - `get_twin_category`：按层级查该层所有孪生体类别，参数 `{"levelName": "XXX"}`
-- `get_all_environment`：获取所有环境监控对象
-- `query_environment_sensor_data`：查传感器数据，参数 `{"twinCategoryName": "XXX", "twinInstanceName": "XXX"}`
-
-如果仍无法确认名称类参数，返回"场景中没有找到匹配的信息"及相关候选数据，并放入一组 `[]` 中直接输出，不伪造指令，**此条规则非常重要，优先级最高**。
+  如果仍无法确认名称类参数，返回"场景中没有找到匹配的信息"及相关候选数据，并放入一组 `[]` 中直接输出，不伪造指令，**此条规则非常重要，优先级最高**。
 
 ### 4. 生成标准指令串
 
@@ -155,11 +152,9 @@ python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data
 
 始终按以下顺序拼接：
 
-1. 问候段
+1. 计划结果段
 2. `THISSECTIONEND`
-3. 计划结果段
-4. `THISSECTIONEND`
-5. `AGENTEND`
+3. `AGENTEND`
 
 格式必须与既有系统兼容，具体结构见 [references/integration.md](references/integration.md)。
 
@@ -202,33 +197,25 @@ python scripts/invoke_skill.py --token <token> --mcp-tool get_twin_category_data
 
 ### 用户可见文本
 
-调用脚本执行后，脚本会返回一个 JSON 结果，其中包含 `plan_text` 字段。**必须直接把 `plan_text` 的内容作为最终回复展示给用户，不要自己另外编写回复内容。**
+调用脚本执行后，脚本的 stdout 直接就是 `plan_text` 纯文本，**原样作为最终回复输出，不要修改、不要包装**。
 
-例如脚本返回：
+示例输出：
 
-```json
-{
-  "plan_text": "根据最优策略，已经为您规划如下执行计划：\n1、层级切换：上一层",
-  "execution_result": { "code": 10000, "msg": "成功" }
-}
 ```
-
-则直接向用户输出：`根据最优策略，已经为您规划如下执行计划：\n1、层级切换：上一层`
+根据最优策略，已经为您规划如下执行计划：
+1、层级切换：上一层
+```
 
 询问类（D01）示例：
 
-```json
-{
-  "plan_text": "为您查找到相关内容如下：大会议室摄像头2，后门入口摄像头；共2个"
-}
 ```
-
-则直接向用户输出：`为您查找到相关内容如下：大会议室摄像头2，后门入口摄像头；共2个`
+为您查找到相关内容如下：大会议室摄像头2，后门入口摄像头；共2个
+```
 
 禁止：
 
 - 输出 `A09`、`A03`、`B07` 这类裸编码给用户。
-- 自行编写"已发送指令"、"请查看场景"等替代性描述，而不使用 `plan_text`。
+- 自行编写"已发送指令"、"请查看场景"等替代性描述。
 - 把"开始/停止/名称"等参数留空。
 
 ### 执行指令文本

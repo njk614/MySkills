@@ -69,10 +69,9 @@ NO_ARG_COMMAND_TEXT = {
 
 DIRECT_INFO_PREFIXES = {
     "A01", "A02", "A07", "A08", "A10", "A11", "A12", "A15", "A16", "A17", "A18",
-    "A19", "A22", "A23", "A24", "A25", "A29", "A39", "B01", "B02", "B06", "B07",
-    "B08", "B09", "B10", "C01", "C02",
+    "A19", "A22", "A23", "A24", "A25", "A26", "A27", "A28", "A29", "A39",
+    "B01", "B02", "B06", "B07", "B08", "B09", "B10", "C01", "C02",
 }
-ENVIRONMENT_PREFIXES = {"A26", "A27", "A28"}
 DEMO_PREFIXES = {"A30"}
 
 
@@ -439,8 +438,6 @@ def _get_display_text(command: str) -> str:
     extracted = _extract_info(command)
     if command_prefix in DIRECT_INFO_PREFIXES:
         return extracted
-    if command_prefix in ENVIRONMENT_PREFIXES:
-        return "环境控制" + extracted
     if command_prefix in DEMO_PREFIXES:
         return "演示汇报" + extracted
     return "执行失败，失败原因：" + command
