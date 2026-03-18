@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -8,8 +7,9 @@ const DEFAULT_MQTT_URL = 'mqtts://y9afbaf6.ala.cn-hangzhou.emqxsl.cn:8883';
 const DEFAULT_MQTT_USERNAME = 'twinioc';
 const DEFAULT_MQTT_PASSWORD = 'abc123';
 const DEFAULT_MQTT_TOPIC = 'twineasy/location/dyo6vaow6203kx09/alarm/changed/v1';
+const TARGET_BELONG_TO_LOCATION_ID = 'dyo6vaow6203kx09';
+const DEFAULT_OPENCLAW_HOOK_BASE_URL = 'http://127.0.0.1:18789';
 const DEFAULT_ALERT_TITLE = '告警通知';
-const DEFAULT_OPENCLAW_CLI_BIN = 'openclaw';
 const PUSH_RETRY_DELAYS_MS = [0, 500, 1500];
 const NO_ALARM_TEXT = new Set(['', 'null', '[]', '{}', '""']);
 
@@ -30,7 +30,8 @@ const httpTimeoutSeconds = Number.parseFloat(process.env.HTTP_TIMEOUT_SECONDS ||
 const timeoutMs = Number.isFinite(httpTimeoutSeconds) && httpTimeoutSeconds > 0 ? httpTimeoutSeconds * 1000 : 10000;
 const logLevel = (process.env.MQTT_LOG_LEVEL || 'info').toLowerCase();
 const alertTitle = process.env.ALERT_TITLE || DEFAULT_ALERT_TITLE;
-const openclawCliBin = (process.env.OPENCLAW_CLI_BIN || DEFAULT_OPENCLAW_CLI_BIN).trim();
+const openclawHookBaseUrl = (process.env.OPENCLAW_HOOK_BASE_URL || DEFAULT_OPENCLAW_HOOK_BASE_URL).trim();
+const openclawHookToken = (process.env.OPENCLAW_HOOK_TOKEN || '').trim();
 
 mkdirSync(stateDir, { recursive: true });
 writeFileSync(pidFile, String(process.pid));
@@ -56,6 +57,14 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function buildAgentEndpoint() {
+  const base = openclawHookBaseUrl.replace(/\/+$/, '');
+  if (base.endsWith('/hooks')) {
+    return `${base}/agent`;
+  }
+  return `${base}/hooks/agent`;
 }
 
 function isDebugLogEnabled() {
@@ -348,82 +357,83 @@ function extractAlarmRecords(payloadObject) {
   return [];
 }
 
+function filterRecordsByLocation(records, targetLocationId) {
+  if (!Array.isArray(records) || records.length === 0) {
+    return [];
+  }
+  return records.filter((item) => {
+    if (!item || typeof item !== 'object') {
+      return false;
+    }
+    const locationId = pickField(item, ['BelongToLocationID', 'belongToLocationID', 'belongToLocationId']);
+    return locationId === targetLocationId;
+  });
+}
+
 function buildAlarmCardItem(item) {
   const twinContent = parseJsonObject(pickField(item, ['TwinCategoryContent', 'twinCategoryContent']));
   const twinInstanceName = pickField(twinContent, ['孪生体实例名称']) || '-';
   return `🚨 通知：${twinInstanceName} 发生了告警`;
 }
 
-function buildAlertMessage(_topic, parsedPayload) {
-  const payloadObject = parsedPayload && typeof parsedPayload === 'object' ? parsedPayload : null;
-  const records = extractAlarmRecords(payloadObject);
-  const displayRecords = records.length > 0 ? records : [payloadObject];
-  return displayRecords.map((item) => buildAlarmCardItem(item)).join('\n');
+function buildAlertMessage(records) {
+  return records.map((item) => buildAlarmCardItem(item)).join('\n');
 }
 
-function sendViaOpenclawCli(recipient, message) {
-  return new Promise((resolve) => {
-    const args = ['message', 'send', '--channel', recipient.channel, '--target', recipient.to, '--message', message];
-    const commandDisplay = `${openclawCliBin} ${args.join(' ')}`;
-    const child = spawn(openclawCliBin, args, {
-      windowsHide: true,
-      shell: process.platform === 'win32',
-      env: process.env,
+async function postJson(url, payload, extraHeaders = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        accept: 'text/plain',
+        'Content-Type': 'application/json',
+        ...extraHeaders,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
     });
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    const timer = setTimeout(() => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      child.kill();
-      resolve({ ok: false, status: -1, responseText: `timeout (${timeoutMs}ms)`, commandDisplay });
-    }, timeoutMs);
-
-    child.stdout?.on('data', (chunk) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr?.on('data', (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', (error) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      resolve({ ok: false, status: -1, responseText: error.message, commandDisplay });
-    });
-
-    child.on('close', (code) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      const responseText = stdout.trim() || stderr.trim();
-      resolve({ ok: code === 0, status: code ?? -1, responseText, commandDisplay });
-    });
-  });
+    const responseText = (await response.text()).trim();
+    return { status: response.status, ok: response.ok, responseText };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function pushAlertToRecipient(recipient, message) {
+  const endpoint = buildAgentEndpoint();
+  const payload = {
+    token: openclawHookToken,
+    message,
+    channel: recipient.channel,
+    to: recipient.to,
+    deliver: true,
+  };
+  const authHeaders = {
+    Authorization: `Bearer ${openclawHookToken}`,
+    'x-openclaw-token': openclawHookToken,
+  };
+
   for (let attempt = 0; attempt < PUSH_RETRY_DELAYS_MS.length; attempt += 1) {
     const delay = PUSH_RETRY_DELAYS_MS[attempt];
     if (delay > 0) {
       await sleep(delay);
     }
 
-    const result = await sendViaOpenclawCli(recipient, message);
+    let result;
+    try {
+      result = await postJson(endpoint, payload, authHeaders);
+    } catch (error) {
+      const messageText = error instanceof Error ? error.message : String(error);
+      log(`push mode=hook attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} recipient=${recipient.channel}:${recipient.to} error=${messageText}`);
+      continue;
+    }
+
     log(
-      `push mode=cli attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} recipient=${recipient.channel}:${recipient.to} ` +
-        `status=${result.status} ok=${result.ok} cmd="${result.commandDisplay}" body=${result.responseText}`
+      `push mode=hook attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} endpoint=${endpoint} recipient=${recipient.channel}:${recipient.to} ` +
+        `status=${result.status} ok=${result.ok} body=${result.responseText}`
     );
 
     if (result.ok) {
@@ -446,8 +456,14 @@ if (!mqttUrl.startsWith('mqtt://') && !mqttUrl.startsWith('mqtts://')) {
   process.exit(1);
 }
 
-if (!openclawCliBin) {
-  log('Invalid OPENCLAW_CLI_BIN value.');
+if (!openclawHookBaseUrl.startsWith('http://') && !openclawHookBaseUrl.startsWith('https://')) {
+  log('Invalid OPENCLAW_HOOK_BASE_URL format. Expected http:// or https://');
+  cleanup();
+  process.exit(1);
+}
+
+if (!openclawHookToken) {
+  log('Missing required OPENCLAW_HOOK_TOKEN.');
   cleanup();
   process.exit(1);
 }
@@ -498,7 +514,6 @@ client.on('error', (error) => {
 async function processMessage(topic, payloadBuffer) {
   const payloadText = payloadBuffer.toString('utf8');
   const parsedPayload = tryParseJson(payloadText);
-  const payloadForState = parsedPayload ?? payloadText;
 
   if (isDebugLogEnabled()) {
     log(`Received alarm message on ${topic}: ${payloadText}`);
@@ -511,7 +526,16 @@ async function processMessage(topic, payloadBuffer) {
     return;
   }
 
-  const alertMessage = buildAlertMessage(topic, parsedPayload);
+  const payloadObject = parsedPayload && typeof parsedPayload === 'object' ? parsedPayload : null;
+  const extractedRecords = extractAlarmRecords(payloadObject);
+  const matchedRecords = filterRecordsByLocation(extractedRecords, TARGET_BELONG_TO_LOCATION_ID);
+  if (matchedRecords.length === 0) {
+    log(`No records matched BelongToLocationID=${TARGET_BELONG_TO_LOCATION_ID} on topic=${topic}, skip actions.`);
+    return;
+  }
+
+  const alertMessage = buildAlertMessage(matchedRecords);
+  const payloadForState = { BelongToLocationID: TARGET_BELONG_TO_LOCATION_ID, Data: matchedRecords };
   const currentSignature = buildAlarmSignature(topic, payloadForState);
   const failedRecipients = [];
   const pushedRecipients = [];

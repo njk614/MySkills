@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Entry point for operation-rule-recorder skill."""
+"""Entry point for ruisi-twinioc-opeationrule-skill skill."""
 
 from __future__ import annotations
 

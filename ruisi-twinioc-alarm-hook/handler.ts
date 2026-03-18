@@ -34,7 +34,7 @@ export default async function handler(event: HookEvent): Promise<void> {
 
   const workspaceDir = event.context?.workspaceDir;
   if (!workspaceDir) {
-    console.error('[alarm-mqtt-hook] Missing workspaceDir in hook context.');
+    console.error('[ruisi-twinioc-alarm-hook] Missing workspaceDir in hook context.');
     return;
   }
 
@@ -47,7 +47,7 @@ export default async function handler(event: HookEvent): Promise<void> {
   try {
     const existingPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10);
     if (isProcessRunning(existingPid)) {
-      console.log(`[alarm-mqtt-hook] Subscriber already running with PID ${existingPid}.`);
+      console.log(`[ruisi-twinioc-alarm-hook] Subscriber already running with PID ${existingPid}.`);
       return;
     }
   } catch {
@@ -69,6 +69,6 @@ export default async function handler(event: HookEvent): Promise<void> {
 
   child.unref();
   writeFileSync(pidFile, String(child.pid));
-  console.log(`[alarm-mqtt-hook] Started subscriber with PID ${child.pid}.`);
+  console.log(`[ruisi-twinioc-alarm-hook] Started subscriber with PID ${child.pid}.`);
   event.messages?.push('MQTT alarm pusher started in background.');
 }

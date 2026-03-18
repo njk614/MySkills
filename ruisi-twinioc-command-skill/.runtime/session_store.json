@@ -1,0 +1,18 @@
+{
+  "default": {
+    "session_id": "default",
+    "token_judge": "3jbasl",
+    "history_user": [
+      {
+        "question": "聚焦到环境传感器1",
+        "content": "A02：层级切换：楼层20&B01：聚焦对象：环境传感器1"
+      },
+      {
+        "question": "打开大会议室的温控器",
+        "content": "B09：打开温控器：大会议室温控器"
+      }
+    ],
+    "history_inter": [],
+    "updated_at": 1773656022.8765426
+  }
+}

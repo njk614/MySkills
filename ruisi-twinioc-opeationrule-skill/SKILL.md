@@ -1,9 +1,9 @@
 ﻿---
-name: operation-rule-recorder
+name: ruisi-twinioc-opeationrule-skill
 description: Use this skill to record user queries that ask what operation to perform in response to a temperature reading or an alarm event, or that set up a scheduled/recurring task rule. Only record these three scenarios. Also trigger when the user asks to view, search, or list all recorded rules or operation history.
 ---
 
-# 操作规则记录器
+# 睿思孪易产品操作规则记录技能包
 
 本 Skill 负责记录用户**针对温度数据或告警事件询问应执行何种操作**，或**设定定时任务规则**时的提问及 AI 返回的执行计划，并提供历史查询功能。
 
@@ -160,5 +160,5 @@ python scripts/invoke_recorder.py --query-log --token <token> --date 2026-03-13 
 
 ## 记录文件存储位置
 
-- 默认路径：`operation-rule-recorder/.logs/operations.jsonl`
+- 默认路径：`ruisi-twinioc-opeationrule-skill/.logs/operations.jsonl`
 - 每行一条 JSON 记录（JSON Lines 格式），追加写入。
