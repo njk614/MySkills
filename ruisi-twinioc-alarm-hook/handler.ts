@@ -38,7 +38,7 @@ export default async function handler(event: HookEvent): Promise<void> {
     return;
   }
 
-  const stateDir = path.join(workspaceDir, '.openclaw-alarm-mqtt');
+  const stateDir = path.join(workspaceDir, '.openclaw-ruisi-twinioc-alarm-hook');
   const pidFile = path.join(stateDir, 'subscriber.pid');
   const subscriberPath = path.join(hookDir, 'subscriber.mjs');
 

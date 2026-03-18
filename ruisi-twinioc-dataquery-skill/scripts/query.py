@@ -32,27 +32,25 @@ SKILLS_ROOT = SKILL_ROOT.parent
 
 # MCP 查询结果缓存文件（token 变化时全部清空）
 CACHE_FILE = SKILL_ROOT / ".runtime" / "mcp_cache.json"
+CACHE_SCHEMA_VERSION = 2
 
 # 实时/动态数据类工具，跳过缓存
 _NO_CACHE_TOOLS: frozenset[str] = frozenset(
     {
         "get_scene_context",  # 含会话历史，实时变化
+        "get_scene_info",
+        "get_twin_category_data",
+        "get_twin_category",
+        "get_bind_video_instance_names",
     }
 )
 
-# MCP tools served by the twinioc_interactive_command runtime
-_TWINIOC_MCP_TOOLS: frozenset[str] = frozenset(
+_SUPPORTED_MCP_TOOLS: frozenset[str] = frozenset(
     {
         "get_scene_info",
         "get_twin_category_data",
         "get_twin_category",
         "get_scene_context",
-    }
-)
-
-# MCP tools served by the video_surveillance_command runtime
-_VIDEO_MCP_TOOLS: frozenset[str] = frozenset(
-    {
         "get_bind_video_instance_names",
     }
 )
@@ -359,15 +357,19 @@ def _cache_key(tool: str, mcp_args_obj: dict) -> str:
 
 def _load_cache() -> dict:
     if not CACHE_FILE.exists():
-        return {"last_token": "", "entries": {}}
+        return {"version": CACHE_SCHEMA_VERSION, "last_token": "", "entries": {}}
     try:
-        return json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+        cache = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
     except Exception:
-        return {"last_token": "", "entries": {}}
+        return {"version": CACHE_SCHEMA_VERSION, "last_token": "", "entries": {}}
+    if not isinstance(cache, dict) or cache.get("version") != CACHE_SCHEMA_VERSION:
+        return {"version": CACHE_SCHEMA_VERSION, "last_token": "", "entries": {}}
+    return cache
 
 
 def _save_cache(cache: dict) -> None:
     CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    cache["version"] = CACHE_SCHEMA_VERSION
     CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -427,15 +429,13 @@ def _run_temperature(args: argparse.Namespace) -> int:
 
 
 def _run_mcp(args: argparse.Namespace) -> int:
-    """Route MCP tool call to the correct invoke_skill.py, with result caching."""
+    """Route MCP tool call to ruisi-twinioc-command-skill, with result caching."""
     tool = args.mcp_tool
+    if tool not in _SUPPORTED_MCP_TOOLS:
+        print(json.dumps({"success": False, "error": f"不支持的 MCP 工具: {tool}"}, ensure_ascii=False, indent=2))
+        return 1
 
-    if tool in _VIDEO_MCP_TOOLS:
-        invoke_script = SKILLS_ROOT / "video_surveillance_command" / "scripts" / "invoke_skill.py"
-    else:
-        # Default: twinioc_interactive_command handles all other MCP tools
-        invoke_script = SKILLS_ROOT / "twinioc_interactive_command" / "scripts" / "invoke_skill.py"
-
+    invoke_script = SKILLS_ROOT / "ruisi-twinioc-command-skill" / "scripts" / "invoke_skill.py"
     if not invoke_script.exists():
         print(
             json.dumps(
@@ -476,7 +476,7 @@ def _run_mcp(args: argparse.Namespace) -> int:
     cache = _load_cache()
     if cache.get("last_token") != args.token:
         # token 变化，清空全部缓存
-        cache = {"last_token": args.token, "entries": {}}
+        cache = {"version": CACHE_SCHEMA_VERSION, "last_token": args.token, "entries": {}}
 
     key = _cache_key(tool, mcp_args_obj)
     if key in cache["entries"]:
@@ -498,47 +498,40 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="TwinEasy unified data query (read-only, no instruction sending)",
     )
-    sub = parser.add_subparsers(dest="mode", required=True)
-
-    # ── temperature subcommand ────────────────────────────────────────────────
-    temp = sub.add_parser("temperature", help="Query temperature sensor for a device")
-    temp.add_argument("--token", required=True, help="孪易场景 token（默认可用 gj6mxa）")
-    temp.add_argument(
-        "--device-query",
-        default=None,
-        help="用户输入，通过安装位置或孪生体实例名称匹配设备（不填则使用默认台账）",
-    )
-    temp.add_argument(
-        "--location-id",
-        default="dyo6vaow6203kx09",
-        help="Location ID（默认 dyo6vaow6203kx09）",
-    )
-    temp.add_argument(
-        "--target-ledger-id",
-        default=None,
-        help="直接指定用户台账 ID（与 --device-query 二选一）",
-    )
-    temp.add_argument("--timeout", type=float, default=100.0, help="HTTP 超时秒数")
-    temp.add_argument("--max-attempts", type=int, default=5, help="最大重试次数")
-
-    # ── mcp subcommand ────────────────────────────────────────────────────────
-    mcp = sub.add_parser("mcp", help="Call an MCP tool and return JSON result")
-    mcp.add_argument("--token", required=True, help="孪易场景 token")
-    mcp.add_argument(
+    parser.add_argument("--token", required=True, help="孪易场景 token（可用 gj6mxa）")
+    # MCP 查询模式
+    parser.add_argument(
         "--mcp-tool",
-        required=True,
+        default=None,
         help=(
             "要调用的 MCP 工具名称。"
             "支持：get_scene_info / get_twin_category_data / get_twin_category / "
-            "get_bind_video_instance_names"
+            "get_scene_context / get_bind_video_instance_names"
         ),
     )
-    mcp.add_argument(
+    parser.add_argument(
         "--mcp-args",
         default="{}",
         help="MCP 工具参数 JSON 字符串，如 '{\"twinCategoryName\": \"可控摄像头\"}'",
     )
-
+    # 温度查询模式
+    parser.add_argument(
+        "--device-query",
+        default=None,
+        help="用户输入，通过安装位置或孪生体实例名称匹配设备（不填则使用默认台账）",
+    )
+    parser.add_argument(
+        "--location-id",
+        default="dyo6vaow6203kx09",
+        help="Location ID（默认 dyo6vaow6203kx09）",
+    )
+    parser.add_argument(
+        "--target-ledger-id",
+        default=None,
+        help="直接指定用户台账 ID（与 --device-query 二选一）",
+    )
+    parser.add_argument("--timeout", type=float, default=100.0, help="HTTP 超时秒数")
+    parser.add_argument("--max-attempts", type=int, default=5, help="最大重试次数")
     return parser
 
 
@@ -546,13 +539,9 @@ def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
 
-    if args.mode == "temperature":
-        return _run_temperature(args)
-    if args.mode == "mcp":
+    if args.mcp_tool:
         return _run_mcp(args)
-
-    parser.print_help()
-    return 1
+    return _run_temperature(args)
 
 
 if __name__ == "__main__":

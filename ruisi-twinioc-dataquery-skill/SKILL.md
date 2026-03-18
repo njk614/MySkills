@@ -25,9 +25,9 @@ description: Use this skill for all read-only data query and information-retriev
 
 **与其他 Skill 的职责边界：**
 
-- 本 Skill 负责**查询与信息获取**，获取到数据后如需执行控制指令，再转交 `twinioc-interactive-command` 或 `video-surveillance-command`。
-- 温控执行（打开温控器、关灯等）属于 `twinioc-interactive-command`，不在本 Skill 范围内。
-- 摄像头视频流切换、视频布局控制属于 `video-surveillance-command`。
+- 本 Skill 负责**查询与信息获取**，获取到数据后如需执行控制指令，再转交 `ruisi-twinioc-command-skill`。
+- 温控执行（打开温控器、关灯等）属于 `ruisi-twinioc-command-skill`，不在本 Skill 范围内。
+- 摄像头视频流筛选、视频布局控制、云台控制也属于 `ruisi-twinioc-command-skill`。
 
 ## When To Use
 
@@ -37,7 +37,7 @@ description: Use this skill for all read-only data query and information-retriev
 - 用户询问场景有哪些层级、图层、图表、主题
 - 用户需要知道某类别下有哪些孪生体实例（"这个场景里有哪些摄像头？"）
 - 用户需要查询环境传感器数据（"环境传感器3的湿度是多少？"）
-- 其他 Skill 在生成指令前需要获取名称列表（如 twinioc-interactive-command 需要实例名）
+- 其他 Skill 在生成指令前需要获取名称列表（如 `ruisi-twinioc-command-skill` 需要实例名）
 
 不要在以下情况触发本 Skill：
 
@@ -65,10 +65,10 @@ description: Use this skill for all read-only data query and information-retriev
 
 ```bash
 # 按设备位置或名称查询
-python scripts/query.py temperature --token <token> --device-query "大厅东侧"
+python scripts/query.py --token <token> --device-query "大厅东侧"
 
 # 不指定设备时使用默认台账
-python scripts/query.py temperature --token <token>
+python scripts/query.py --token <token>
 ```
 
 **返回 JSON：**
@@ -113,7 +113,7 @@ python scripts/query.py temperature --token <token>
 **触发条件**：用户询问场景概况、有哪些层级、图层、图表、孪生体类别等。
 
 ```bash
-python scripts/query.py mcp --token <token> --mcp-tool get_scene_info
+python scripts/query.py --token <token> --mcp-tool get_scene_info
 ```
 
 返回场景完整配置 JSON（层级名称、主题列表、图层、图表、孪生体类别等）。
@@ -125,7 +125,7 @@ python scripts/query.py mcp --token <token> --mcp-tool get_scene_info
 **触发条件**：用户询问"有哪些XX？"，如"有哪些摄像头？""有哪些环境传感器？"
 
 ```bash
-python scripts/query.py mcp --token <token> \
+python scripts/query.py --token <token> \
   --mcp-tool get_twin_category_data \
   --mcp-args '{"twinCategoryName": "可控摄像头"}'
 ```
@@ -139,7 +139,7 @@ python scripts/query.py mcp --token <token> \
 **触发条件**：用户询问某层级有哪些孪生体类别。
 
 ```bash
-python scripts/query.py mcp --token <token> \
+python scripts/query.py --token <token> \
   --mcp-tool get_twin_category \
   --mcp-args '{"levelName": "楼层8"}'
 ```
@@ -151,7 +151,7 @@ python scripts/query.py mcp --token <token> \
 **触发条件**：用户询问"有哪些摄像头？""摄像头名称是什么？"，或 `video-surveillance-command` 请求摄像头列表。
 
 ```bash
-python scripts/query.py mcp --token <token> --mcp-tool get_bind_video_instance_names
+python scripts/query.py --token <token> --mcp-tool get_bind_video_instance_names
 ```
 
 返回当前场景绑定的所有摄像头实例名称。
@@ -180,7 +180,7 @@ python scripts/query.py mcp --token <token> --mcp-tool get_bind_video_instance_n
 - 先把 `reply` 中的确认话术展示给用户。
 - 用户明确确认后，优先由 `ruisi-twinioc-command-skill` 调用 `ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>` 取出待确认动作；若存在 `pending.execute_query`，则将它作为新的用户执行请求转交 `ruisi-twinioc-command-skill`。
 
-若只是普通查询结果需要进一步执行控制指令，再将数据传递给 `twinioc-interactive-command` 或 `video-surveillance-command`。
+若只是普通查询结果需要进一步执行控制指令，再将数据传递给 `ruisi-twinioc-command-skill`。
 
 ## Output Rules
 

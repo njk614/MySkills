@@ -1,18 +1,71 @@
 {
   "default": {
     "session_id": "default",
-    "token_judge": "3jbasl",
-    "history_user": [
+    "token_judge": "t4rmho",
+    "scene_info": "{\n  \"levelNames\": [],\n  \"themeNames\": [],\n  \"demoReportNames\": [],\n  \"layerNames\": [],\n  \"twinCategoryNames\": []\n}",
+    "history_user": [],
+    "history_inter": [
       {
-        "question": "聚焦到环境传感器1",
-        "content": "A02：层级切换：楼层20&B01：聚焦对象：环境传感器1"
+        "tool_call_name": "get_scene_info",
+        "tool_response": {
+          "levelNames": [],
+          "themeNames": [],
+          "demoReportNames": [],
+          "layerNames": [],
+          "twinCategoryNames": []
+        }
       },
       {
-        "question": "打开大会议室的温控器",
-        "content": "B09：打开温控器：大会议室温控器"
+        "tool_call_name": "get_scene_info",
+        "tool_response": {
+          "levelNames": [],
+          "themeNames": [],
+          "demoReportNames": [],
+          "layerNames": [],
+          "twinCategoryNames": []
+        }
+      },
+      {
+        "tool_call_name": "get_scene_info",
+        "tool_response": {
+          "levelNames": [],
+          "themeNames": [],
+          "demoReportNames": [],
+          "layerNames": [],
+          "twinCategoryNames": []
+        }
+      },
+      {
+        "tool_call_name": "get_scene_info",
+        "tool_response": {
+          "levelNames": [],
+          "themeNames": [],
+          "demoReportNames": [],
+          "layerNames": [],
+          "twinCategoryNames": []
+        }
+      },
+      {
+        "tool_call_name": "get_scene_info",
+        "tool_response": {
+          "levelNames": [],
+          "themeNames": [],
+          "demoReportNames": [],
+          "layerNames": [],
+          "twinCategoryNames": []
+        }
+      },
+      {
+        "tool_call_name": "get_twin_category_data",
+        "tool_response": []
+      },
+      {
+        "tool_call_name": "get_twin_category_data",
+        "tool_response": []
       }
     ],
-    "history_inter": [],
-    "updated_at": 1773656022.8765426
+    "mcp_session_id": "d2Yrb2YRyx6UxGcRe0ctRw",
+    "mcp_initialized": true,
+    "updated_at": 1773815470.109641
   }
 }

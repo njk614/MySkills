@@ -14,7 +14,7 @@ const PUSH_RETRY_DELAYS_MS = [0, 500, 1500];
 const NO_ALARM_TEXT = new Set(['', 'null', '[]', '{}', '""']);
 
 const workspaceDir = process.env.WORKSPACE_DIR || process.cwd();
-const stateDir = process.env.ALARM_MQTT_STATE_DIR || path.join(workspaceDir, '.openclaw-alarm-mqtt');
+const stateDir = process.env.ALARM_MQTT_STATE_DIR || path.join(workspaceDir, '.openclaw-ruisi-twinioc-alarm-hook');
 const pidFile = process.env.ALARM_MQTT_PID_FILE || path.join(stateDir, 'subscriber.pid');
 const logFile = path.join(stateDir, 'subscriber.log');
 const consumerStateFile = path.join(stateDir, 'consumer.state.json');
@@ -380,6 +380,26 @@ function buildAlertMessage(records) {
   return records.map((item) => buildAlarmCardItem(item)).join('\n');
 }
 
+function buildStrictAgentMessage(rawMessage) {
+  const normalizedMessage = String(rawMessage ?? '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+
+  return [
+    '你是“纯转发器”，不是助手。',
+    '唯一任务：原样输出指定文本。',
+    '硬性规则：',
+    '1) 只能输出指定文本本体，逐字逐符号一致。',
+    '2) 禁止任何前后缀、禁止解释、禁止总结、禁止改写、禁止润色、禁止提问、禁止建议。',
+    '3) 禁止新增 emoji、项目符号、标题、时间、地点、状态、备注。',
+    '4) 禁止输出“需要我帮你…”等任何引导句。',
+    '5) 若无法遵守，也必须仅输出指定文本本体。',
+    '指定文本开始',
+    normalizedMessage,
+    '指定文本结束',
+  ].join('\n');
+}
+
 async function postJson(url, payload, extraHeaders = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -404,9 +424,10 @@ async function postJson(url, payload, extraHeaders = {}) {
 
 async function pushAlertToRecipient(recipient, message) {
   const endpoint = buildAgentEndpoint();
+  const strictMessage = buildStrictAgentMessage(message);
   const payload = {
     token: openclawHookToken,
-    message,
+    message: strictMessage,
     channel: recipient.channel,
     to: recipient.to,
     deliver: true,

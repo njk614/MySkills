@@ -1,4 +1,4 @@
-# ruisi-twinioc-alarm-hook 部署说明（方式2：/hooks/agent）
+# 睿思孪易产品告警推送技能包 部署说明（方式2：/hooks/agent）
 
 ## 1. 功能
 

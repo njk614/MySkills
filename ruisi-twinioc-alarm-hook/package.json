@@ -1,11 +1,11 @@
 {
-  "name": "ruisi-twinioc-alarm-hook",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "node subscriber.mjs"
-  },
-  "dependencies": {
-    "mqtt": "^5.10.4"
-  }
+    "name": "ruisi-twinioc-alarm-hook",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "start": "node subscriber.mjs"
+    },
+    "dependencies": {
+        "mqtt": "^5.10.4"
+    }
 }

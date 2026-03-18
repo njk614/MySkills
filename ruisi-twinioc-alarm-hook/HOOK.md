@@ -1,8 +1,8 @@
 ---
 name: ruisi-twinioc-alarm-hook
-description: 'Subscribe to alarm MQTT messages and push alerts to clients via /hooks/agent.'
+description: "睿思孪易产品告警推送技能包"
 homepage: https://docs.openclaw.ac.cn/automation/hooks
-metadata: { 'openclaw': { 'emoji': '🚨', 'events': ['gateway:startup'], 'requires': { 'bins': ['node'], 'config': ['workspace.dir'] } } }
+metadata: { "openclaw": { "emoji": "🚨", "events": ["gateway:startup"], "requires": { "bins": ["node"], "config": ["workspace.dir"] } } }
 ---
 
 # 睿思孪易产品告警推送技能包
@@ -15,8 +15,8 @@ metadata: { 'openclaw': { 'emoji': '🚨', 'events': ['gateway:startup'], 'requi
 2. 订阅配置的告警 topic
 3. 收到消息后按既有规则识别是否有告警
 4. 先按 `BelongToLocationID=dyo6vaow6203kx09` 过滤
-5. 对每个接收方做签名去重
-6. 调用 `POST /hooks/agent` 推送客户端告警消息
+4. 对每个接收方做签名去重
+5. 调用 `POST /hooks/agent` 推送客户端告警消息
 
 ## 默认 MQTT 参数
 
@@ -101,6 +101,6 @@ x-openclaw-token: {OPENCLAW_HOOK_TOKEN}
 
 运行状态写到工作区：
 
-- `.openclaw-alarm-mqtt/subscriber.pid`
-- `.openclaw-alarm-mqtt/subscriber.log`
-- `.openclaw-alarm-mqtt/consumer.state.json`
+- `.openclaw-ruisi-twinioc-alarm-hook/subscriber.pid`
+- `.openclaw-ruisi-twinioc-alarm-hook/subscriber.log`
+- `.openclaw-ruisi-twinioc-alarm-hook/consumer.state.json`
