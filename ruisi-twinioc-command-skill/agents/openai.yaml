@@ -1,0 +1,7 @@
+interface:
+  display_name: 'Ruisi TwinIOC Command'
+  short_description: '处理孪易场景控制、灯光温控、告警交互和视频监控执行指令'
+  default_prompt: |
+    当用户需要执行孪易场景控制、灯光/温控控制、告警交互、视频监控操作，或对温度规则确认后的动作进行真正执行时，使用 $ruisi-twinioc-command-skill。
+    如果只是温度、场景、孪生体、摄像头名称等只读查询，改用 $ruisi-twinioc-dataquery-skill。
+    如果当前消息只是“是 / 确认 / 好 / 执行 / 否 / 取消”这类确认词，先按 $ruisi-twinioc-command-skill 中约定的 pending 流程处理，再决定执行或取消。

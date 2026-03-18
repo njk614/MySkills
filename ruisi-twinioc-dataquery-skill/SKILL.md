@@ -55,6 +55,14 @@ description: Use this skill for all read-only data query and information-retriev
 
 **触发条件**：用户询问温度，如"大厅东侧现在多少度？""会议室温度高吗？"
 
+**温度规则联动**：
+
+- 当用户是纯温度查询（如"大会议室温度是多少？"）时，先运行温度查询。
+- 温度值返回后，必须继续调用 `ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --match-temperature`，按当前设备名称与温度值匹配已记录的温度规则。
+- 若命中规则，则把规则确认话术直接拼到 `reply` 中一起返回，例如：`大会议室当前温度25℃。当前大会议室25℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？`
+- 命中规则后，查询脚本还会自动把 `rule_match.parsed_rule.execute_query` 写入 `ruisi-twinioc-opeationrule-skill` 的待确认区，供用户下一句只回复“是/否”时继续处理。
+- 若未命中规则，则仅返回温度查询结果。
+
 ```bash
 # 按设备位置或名称查询
 python scripts/query.py temperature --token <token> --device-query "大厅东侧"
@@ -68,7 +76,21 @@ python scripts/query.py temperature --token <token>
 ```json
 {
   "success": true,
-  "reply": "大厅东侧当前温度23.5℃"
+  "reply": "大厅东侧当前温度23.5℃。当前大厅东侧23.5℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？",
+  "temperature": 23.5,
+  "device_name": "大厅东侧",
+  "rule_match": {
+    "query": "当大厅东侧温度大于20度时关闭照明灯",
+    "confirmation_text": "当前大厅东侧23.5℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？",
+    "parsed_rule": {
+      "device_name": "大厅东侧",
+      "operator": "gt",
+      "operator_text": "大于",
+      "threshold": 20.0,
+      "action_text": "关闭照明灯",
+      "execute_query": "关闭大厅东侧照明灯"
+    }
+  }
 }
 ```
 
@@ -153,11 +175,16 @@ python scripts/query.py mcp --token <token> --mcp-tool get_bind_video_instance_n
 
 ### 4. 后续处理（可选）
 
-若查询结果需要进一步执行控制指令，将数据传递给 `twinioc-interactive-command` 或 `video-surveillance-command`。
+若查询结果命中了 `rule_match`：
+
+- 先把 `reply` 中的确认话术展示给用户。
+- 用户明确确认后，优先由 `ruisi-twinioc-command-skill` 调用 `ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>` 取出待确认动作；若存在 `pending.execute_query`，则将它作为新的用户执行请求转交 `ruisi-twinioc-command-skill`。
+
+若只是普通查询结果需要进一步执行控制指令，再将数据传递给 `twinioc-interactive-command` 或 `video-surveillance-command`。
 
 ## Output Rules
 
-1. 温度回复直接使用 `reply` 字段内容，不做修改。
+1. 温度回复直接使用 `reply` 字段内容；如命中规则，`reply` 已包含确认话术。
 2. MCP 查询结果以中文可读方式整理，不直接将原始 JSON dump 给用户。
 3. 查询失败时如实告知用户原因，并提示可能的解决方向（如"设备不存在，可用名称包括……"）。
 4. 不输出任何控制指令编码（如 `A03`、`B01`），本 Skill 只负责展示数据。

@@ -788,10 +788,22 @@
       {
         "tool_call_name": "query_environment_sensor_data",
         "tool_response": {}
+      },
+      {
+        "tool_call_name": "get_twin_category_data",
+        "tool_response": []
+      },
+      {
+        "tool_call_name": "get_twin_category",
+        "tool_response": []
+      },
+      {
+        "tool_call_name": "get_twin_category",
+        "tool_response": []
       }
     ],
-    "mcp_session_id": "O6nl-PC3mC-LipsOoxkbFg",
+    "mcp_session_id": "1eovxF6Fgbk1gQrQxI-Z7Q",
     "mcp_initialized": true,
-    "updated_at": 1773732350.6592588
+    "updated_at": 1773813607.9744036
   }
 }

@@ -1,4 +1,4 @@
-﻿---
+---
 name: ruisi-twinioc-command-skill
 description: This skill should be used when users need to convert Chinese natural-language TwinEasy scene interaction or video surveillance requests into executable command sequences and send them. Handles A/B/C/D scene interaction instructions AND E-series video surveillance instructions. All instruction generation, execution planning, and SendInstruction dispatching is handled here. Data queries are delegated to the ruisi-twinioc-dataquery-skill skill. The AI handles all reasoning; the Python runtime is a pure execution layer.
 ---
@@ -61,6 +61,16 @@ description: This skill should be used when users need to convert Chinese natura
 
 - 纯查询（无需执行指令） 使用 `ruisi-twinioc-dataquery-skill`。
 - 需要执行控制指令（含查询后执行） 使用本 Skill，查询部分委托给 `ruisi-twinioc-dataquery-skill`。
+
+**温度规则联动**：
+
+- 如果 `ruisi-twinioc-dataquery-skill` 的温度查询结果中带有 `rule_match`，说明已经命中 `ruisi-twinioc-opeationrule-skill` 中记录的温度规则。
+- 此时先把 `reply` 中附带的确认话术展示给用户，不直接执行。
+- 命中规则时，`ruisi-twinioc-dataquery-skill` 会自动把待确认动作写入 `ruisi-twinioc-opeationrule-skill/.runtime/pending_confirmations.json`。
+- 当用户下一句只回复“是 / 确认 / 好 / 执行 / 否 / 取消”时，先调用 `python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>` 读取待确认动作。
+- 若用户是肯定答复，且返回的 `pending.execute_query` 存在，则使用该值作为新的执行请求进入本 Skill，例如 `关闭大会议室照明灯`、`打开大会议室温控器`；执行后再调用 `--clear-pending` 清理。
+- 若用户是否定答复，则调用 `python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --clear-pending --token <token>`，然后回复 `已取消操作`。
+- 然后仍按现有规则生成 `B07/B08/B09/B10` 等物理设备指令，并遵守本 Skill 原有的确认与执行流程。
 
 ## Required Inputs
 
@@ -148,6 +158,10 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py temperature \
 
 如果仍无法确认名称类参数，返回"场景中没有找到匹配的信息"及相关候选数据，并放入一组 `[]` 中直接输出，不伪造指令，**此条规则非常重要，优先级最高**。
 
+如果上一步来自温度规则命中后的确认执行，则优先使用 `rule_match.parsed_rule.execute_query` 作为当前 `query`，不要丢失规则中已经补全好的设备名称。
+
+如果当前用户输入本身只是肯定词或否定词，先查 `ruisi-twinioc-opeationrule-skill` 的待确认动作；存在待确认动作时，优先按待确认动作处理，不要把“是/否”直接当作普通控制指令解析。
+
 **E 系列额外数据**：涉及摄像头名称（E34、E35）时，先查 `history_inter` 是否已有结果，没有则调用：
 
 ```bash
@@ -231,6 +245,21 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 ```
 
 用户回复"是"/"确认"/"好"/"好的"/"执行"等肯定词后，再调用执行脚本；用户回复"取消"/"否"/"不"/"算了"等否定词时，不调用脚本，回复"已取消操作"。
+
+对于温度规则联动场景，这里的“调用执行脚本”前必须先执行：
+
+```bash
+python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>
+```
+
+- 如果返回存在 `pending.execute_query`，则把它当作本次真正的 `query` 继续生成指令。
+- 执行完成后，调用：
+
+```bash
+python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --clear-pending --token <token>
+```
+
+- 如果是取消，则直接调用同一个 `--clear-pending` 再回复 `已取消操作`。
 
 #### 直接执行（无需用户确认）
 

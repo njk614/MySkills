@@ -1,4 +1,4 @@
-﻿---
+---
 name: ruisi-twinioc-opeationrule-skill
 description: Use this skill to record user queries that ask what operation to perform in response to a temperature reading or an alarm event, or that set up a scheduled/recurring task rule. Only record these three scenarios. Also trigger when the user asks to view, search, or list all recorded rules or operation history.
 ---
@@ -6,6 +6,11 @@ description: Use this skill to record user queries that ask what operation to pe
 # 睿思孪易产品操作规则记录技能包
 
 本 Skill 负责记录用户**针对温度数据或告警事件询问应执行何种操作**，或**设定定时任务规则**时的提问及 AI 返回的执行计划，并提供历史查询功能。
+
+对于温度规则，本 Skill 现在还承担两项运行时能力：
+
+- 写入时自动把自然语言规则解析为结构化条件，例如“设备 + 比较符 + 阈值 + 动作”。
+- 在温度查询完成后，按“当前设备名 + 当前温度值”匹配已记录规则，并返回确认话术。
 
 ## When To Use
 
@@ -108,6 +113,32 @@ python scripts/invoke_recorder.py --query-log --source schedule --last 20
 | `token`  | 场景 token          | `kqq1po`                             |
 | `query`  | 用户原始输入文字    | `当大会议室温度大于20度时打开温控器` |
 
+温度规则记录若可解析，还会额外包含：
+
+| 字段            | 说明                                          | 示例                 |
+| --------------- | --------------------------------------------- | -------------------- |
+| `parsed_rule`   | 结构化温度规则，仅温度规则有                  | 见下方示例           |
+| `device_name`   | 规则关联的设备/区域名称                       | `大会议室`           |
+| `operator`      | 比较运算符                                    | `gt` / `lte`         |
+| `threshold`     | 阈值                                          | `20.0`               |
+| `action_text`   | 匹配后建议执行的动作文本                      | `关闭照明灯`         |
+| `execute_query` | 用户确认后可直接交给 command skill 的执行语句 | `关闭大会议室照明灯` |
+
+`parsed_rule` 示例：
+
+```json
+{
+  "kind": "temperature_threshold",
+  "device_name": "大会议室",
+  "operator": "gt",
+  "operator_text": "大于",
+  "threshold": 20.0,
+  "threshold_text": "20",
+  "action_text": "关闭照明灯",
+  "execute_query": "关闭大会议室照明灯"
+}
+```
+
 ## 脚本调用方式
 
 ### 写入一条记录
@@ -138,6 +169,85 @@ python scripts/invoke_recorder.py --query-log --source alarm
 python scripts/invoke_recorder.py --query-log --token <token> --date 2026-03-13 --format csv
 ```
 
+### 按当前温度匹配规则
+
+当 `ruisi-twinioc-dataquery-skill` 已经查到当前温度后，调用：
+
+```bash
+python scripts/invoke_recorder.py --match-temperature \
+  --token <token> \
+  --device-name "大会议室" \
+  --temperature-value 25
+```
+
+返回 JSON：
+
+```json
+{
+  "total": 1,
+  "matches": [
+    {
+      "time": "2026-03-18T09:00:00Z",
+      "source": "temperature",
+      "query": "当大会议室温度大于20度时关闭照明灯",
+      "parsed_rule": {
+        "device_name": "大会议室",
+        "operator": "gt",
+        "operator_text": "大于",
+        "threshold": 20.0,
+        "action_text": "关闭照明灯",
+        "execute_query": "关闭大会议室照明灯"
+      },
+      "current_temperature": 25,
+      "confirmation_text": "当前大会议室25℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？"
+    }
+  ]
+}
+```
+
+### 保存待确认动作
+
+当温度查询命中规则且需要等待用户“是/否”确认时，调用：
+
+```bash
+python scripts/invoke_recorder.py --save-pending \
+  --token <token> \
+  --source temperature \
+  --confirmation-text "当前大会议室25℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？" \
+  --execute-query "关闭大会议室照明灯" \
+  --matched-rule-json '{"query":"当大会议室温度大于20度时关闭照明灯"}'
+```
+
+### 读取待确认动作
+
+当用户下一句只回复“是 / 确认 / 好 / 否 / 取消”时，先调用：
+
+```bash
+python scripts/invoke_recorder.py --get-pending --token <token>
+```
+
+返回 JSON：
+
+```json
+{
+  "success": true,
+  "pending": {
+    "time": "2026-03-18T09:05:00Z",
+    "source": "temperature",
+    "confirmation_text": "当前大会议室25℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？",
+    "execute_query": "关闭大会议室照明灯"
+  }
+}
+```
+
+### 清理待确认动作
+
+用户确认执行后，或明确取消后，调用：
+
+```bash
+python scripts/invoke_recorder.py --clear-pending --token <token>
+```
+
 ## 返回格式
 
 ### 写入成功
@@ -162,3 +272,4 @@ python scripts/invoke_recorder.py --query-log --token <token> --date 2026-03-13 
 
 - 默认路径：`ruisi-twinioc-opeationrule-skill/.logs/operations.jsonl`
 - 每行一条 JSON 记录（JSON Lines 格式），追加写入。
+- 待确认动作默认路径：`ruisi-twinioc-opeationrule-skill/.runtime/pending_confirmations.json`

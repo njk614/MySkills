@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Ruisi TwinIOC Operation Rule'
+  short_description: '记录、查询并匹配温度规则、告警规则和定时任务规则'
+  default_prompt: |
+    当用户要记录温度规则、告警规则、定时任务规则，或者要查看已记录规则、查询操作历史时，使用 $ruisi-twinioc-opeationrule-skill。
+    当温度查询后需要按当前温度匹配已记录规则，或需要保存 / 读取 / 清理待确认动作时，也使用 $ruisi-twinioc-opeationrule-skill。

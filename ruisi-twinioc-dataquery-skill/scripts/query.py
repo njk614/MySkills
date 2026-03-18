@@ -267,6 +267,86 @@ def _run_capture(cmd: list[str]) -> tuple[int, str]:
     return result.returncode, result.stdout or ""
 
 
+def _build_python_cmd(script_path: Path) -> list[str]:
+    return [sys.executable, "-X", "utf8", str(script_path)]
+
+
+def _find_matched_temperature_rule(token: str, device_name: str, temperature: float) -> dict[str, Any] | None:
+    recorder_script = SKILLS_ROOT / "ruisi-twinioc-opeationrule-skill" / "scripts" / "invoke_recorder.py"
+    if not recorder_script.exists():
+        return None
+
+    cmd = [
+        *_build_python_cmd(recorder_script),
+        "--match-temperature",
+        "--token",
+        token,
+        "--device-name",
+        device_name,
+        "--temperature-value",
+        str(temperature),
+    ]
+    exit_code, output = _run_capture(cmd)
+    if exit_code != 0 or not output.strip():
+        return None
+
+    try:
+        parsed = json.loads(output)
+    except json.JSONDecodeError:
+        return None
+
+    matches = parsed.get("matches") if isinstance(parsed, dict) else None
+    if not isinstance(matches, list) or not matches:
+        return None
+    latest_match = matches[-1]
+    return latest_match if isinstance(latest_match, dict) else None
+
+
+def _save_pending_rule_action(token: str, matched_rule: dict[str, Any]) -> None:
+    recorder_script = SKILLS_ROOT / "ruisi-twinioc-opeationrule-skill" / "scripts" / "invoke_recorder.py"
+    if not recorder_script.exists():
+        return
+
+    parsed_rule = matched_rule.get("parsed_rule") if isinstance(matched_rule, dict) else None
+    if not isinstance(parsed_rule, dict):
+        return
+
+    execute_query = str(parsed_rule.get("execute_query") or "").strip()
+    if not execute_query:
+        return
+
+    confirmation_text = str(matched_rule.get("confirmation_text") or "").strip()
+    cmd = [
+        *_build_python_cmd(recorder_script),
+        "--save-pending",
+        "--token",
+        token,
+        "--source",
+        "temperature",
+        "--confirmation-text",
+        confirmation_text,
+        "--execute-query",
+        execute_query,
+        "--matched-rule-json",
+        json.dumps(matched_rule, ensure_ascii=False),
+    ]
+    _run_capture(cmd)
+
+
+def _clear_pending_rule_action(token: str) -> None:
+    recorder_script = SKILLS_ROOT / "ruisi-twinioc-opeationrule-skill" / "scripts" / "invoke_recorder.py"
+    if not recorder_script.exists():
+        return
+
+    cmd = [
+        *_build_python_cmd(recorder_script),
+        "--clear-pending",
+        "--token",
+        token,
+    ]
+    _run_capture(cmd)
+
+
 # ---------------------------------------------------------------------------
 # MCP 缓存
 # ---------------------------------------------------------------------------
@@ -324,7 +404,25 @@ def _run_temperature(args: argparse.Namespace) -> int:
 
     device_name = device_info.get("install_location") or device_info.get("twin_name") or device_info["ledger_id"]
     reply = f"{device_name}当前温度{temperature}℃"
-    print(json.dumps({"success": True, "reply": reply}, ensure_ascii=False, indent=2))
+
+    payload: dict[str, Any] = {
+        "success": True,
+        "reply": reply,
+        "temperature": temperature,
+        "device_name": device_name,
+    }
+
+    matched_rule = _find_matched_temperature_rule(args.token, device_name, temperature)
+    if matched_rule:
+        confirmation_text = str(matched_rule.get("confirmation_text") or "").strip()
+        if confirmation_text:
+            payload["reply"] = f"{reply}。{confirmation_text}"
+        payload["rule_match"] = matched_rule
+        _save_pending_rule_action(args.token, matched_rule)
+    else:
+        _clear_pending_rule_action(args.token)
+
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
     return 0
 
 
@@ -364,7 +462,7 @@ def _run_mcp(args: argparse.Namespace) -> int:
         mcp_args_obj["token"] = args.token
 
     cmd = [
-        sys.executable, str(invoke_script),
+        *_build_python_cmd(invoke_script),
         "--token", args.token,
         "--mcp-tool", tool,
         "--mcp-args", json.dumps(mcp_args_obj, ensure_ascii=False),
