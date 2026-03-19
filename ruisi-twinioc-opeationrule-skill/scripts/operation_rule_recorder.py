@@ -168,13 +168,12 @@ def _save_pending_map(pending_map: dict[str, dict[str, Any]], pending_file: Path
 
 
 def write_record(
-    token: str,
+    token: str | None,
     source: str,
     query: str,
     log_file: Path = DEFAULT_LOG_FILE,
 ) -> dict[str, Any]:
-    if not token:
-        raise ValueError("token is required")
+    # token is accepted for compatibility but is not stored in records.
     if not query:
         raise ValueError("query is required")
     if source not in VALID_SOURCES:
@@ -183,7 +182,6 @@ def write_record(
     record: dict[str, Any] = {
         "time": utc_iso(datetime.now(timezone.utc)),
         "source": source,
-        "token": token,
         "query": query,
     }
     if source == "temperature":
@@ -245,24 +243,20 @@ def query_records(
     """Query rule records with optional filters.
 
     Args:
-        token: filter by scene token.
+        token: accepted for compatibility but ignored (records no longer store token).
         source: filter by trigger source (alarm/temperature/user).
         date: filter by date string YYYY-MM-DD (UTC).
         last: return only the last N records (applied after other filters).
         log_file: path to the .jsonl log file.
     """
     records = _load_all(log_file)
-
-    if token:
-        records = [r for r in records if r.get("token") == token]
     if source:
         records = [r for r in records if r.get("source") == source]
     if date:
         records = [r for r in records if r.get("time", "").startswith(date)]
     if last is not None and last > 0:
         records = records[-last:]
-
-    return [{k: v for k, v in _record_with_parsed_rule(r).items() if k != "token"} for r in records]
+    return [ _record_with_parsed_rule(r) for r in records ]
 
 
 def match_temperature_rules(
@@ -275,8 +269,7 @@ def match_temperature_rules(
     normalized_device_name = _normalize_text(device_name)
 
     for record in _load_all(log_file):
-        if token and record.get("token") != token:
-            continue
+        # token is ignored for matching — any recorded temperature rule may apply
         if record.get("source") != "temperature":
             continue
 
@@ -298,9 +291,113 @@ def match_temperature_rules(
         matched_record = {k: v for k, v in enriched_record.items() if k != "token"}
         matched_record["current_temperature"] = temperature
         matched_record["confirmation_text"] = _build_confirmation_text(device_name, temperature, parsed_rule)
+
         matches.append(matched_record)
 
-    return matches
+    # Return only the latest matching rule (by time) if any
+    if not matches:
+        return []
+    latest = max(matches, key=lambda m: m.get("time", ""))
+    return [latest]
+
+
+def match_alarm_rules(
+    device_name: str,
+    token: str | None = None,
+    log_file: Path = DEFAULT_LOG_FILE,
+) -> list[dict[str, Any]]:
+    """Find latest alarm record that mentions the device_name.
+
+    Matching is a simple normalized substring check against the record `query`.
+    Token is accepted for compatibility but ignored.
+    Returns at most one (latest) matching record in a list.
+    """
+    matches: list[dict[str, Any]] = []
+    normalized_device_name = _normalize_text(device_name)
+
+    for record in _load_all(log_file):
+        if record.get("source") != "alarm":
+            continue
+
+        query_text = str(record.get("query") or "")
+        normalized_query = _normalize_text(query_text)
+
+        if not normalized_device_name:
+            continue
+
+        # simple substring match (both directions)
+        if normalized_device_name in normalized_query or normalized_query in normalized_device_name:
+            matched_record = {k: v for k, v in record.items() if k != "token"}
+            matches.append(matched_record)
+
+    if not matches:
+        return []
+    latest = max(matches, key=lambda m: m.get("time", ""))
+    return [latest]
+
+
+def handle_incoming_alarm(
+    device_name: str,
+    alarm_source: str = "camera",
+    log_file: Path = DEFAULT_LOG_FILE,
+) -> dict[str, Any] | None:
+    """Handle an incoming alarm event (e.g., from camera) and return the latest related rule.
+
+    - `device_name`: the device/location reported by the alarm source.
+    - `alarm_source`: source of alarm (currently informational; matching ignores it because
+      records are matched by device/query content). Defaults to 'camera'.
+
+    Returns the latest matching record dict (with any parsed_rule) or None if no match.
+    """
+    matches = match_alarm_rules(device_name=device_name, token=None, log_file=log_file)
+    if not matches:
+        return None
+
+    # matches already returns latest as single-item list
+    latest = matches[0]
+
+    # Try to extract an actionable instruction from the matched query
+    action_text, execute_query = _parse_alarm_action(latest.get("query", ""), device_name)
+    if action_text:
+        latest = dict(latest)
+        latest["action_text"] = action_text
+        latest["execute_query"] = execute_query
+        latest["confirmation_text"] = f"检测到{device_name}告警，{action_text}，请确认是否执行？"
+        return latest
+
+    # Fallback: return the matched record with a generic confirmation asking user to confirm the recorded query
+    latest = dict(latest)
+    latest["confirmation_text"] = f"检测到{device_name}告警，匹配到记录：{latest.get('query')}，请确认是否执行？"
+    latest["execute_query"] = latest.get("query")
+    return latest
+
+
+def _parse_alarm_action(query: str, device_name: str) -> tuple[str | None, str | None]:
+    """Try to parse a short action instruction from an alarm record's query.
+
+    Returns (action_text, execute_query) or (None, None) if not found.
+    The parser looks for common Chinese action verbs and extracts the verb and its object.
+    """
+    if not query:
+        return None, None
+
+    verbs = ["打开", "开启", "关闭", "关掉", "复位", "执行", "停止", "重启", "禁用", "启用"]
+    for v in verbs:
+        m = re.search(fr"({v}.+)", query)
+        if m:
+            action = m.group(1).strip().strip("，,。；; ")
+            execute = _build_execute_query(device_name, action)
+            return action, execute
+
+    # If no verb-based match, try splitting by punctuation and take the trailing phrase
+    parts = re.split(r"[，,;；：:]", query)
+    if len(parts) > 1:
+        action = parts[-1].strip()
+        if action:
+            execute = _build_execute_query(device_name, action)
+            return action, execute
+
+    return None, None
 
 
 def save_pending_confirmation(

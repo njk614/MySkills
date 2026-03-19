@@ -19,6 +19,8 @@ from operation_rule_recorder import (  # noqa: E402
     format_as_csv,
     get_pending_confirmation,
     match_temperature_rules,
+    match_alarm_rules,
+    handle_incoming_alarm,
     query_records,
     save_pending_confirmation,
     write_record,
@@ -32,6 +34,8 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--write", action="store_true", help="Write a new log record.")
     mode.add_argument("--query-log", action="store_true", help="Query log records.")
     mode.add_argument("--match-temperature", action="store_true", help="Match recorded temperature rules.")
+    mode.add_argument("--match-alarm", action="store_true", help="Match recorded alarm rules.")
+    mode.add_argument("--handle-alarm", action="store_true", help="Handle incoming alarm event and return latest related rule.")
     mode.add_argument("--save-pending", action="store_true", help="Save a pending confirmation action.")
     mode.add_argument("--get-pending", action="store_true", help="Get a pending confirmation action.")
     mode.add_argument("--clear-pending", action="store_true", help="Clear a pending confirmation action.")
@@ -74,9 +78,6 @@ def main() -> int:
     pending_file = Path(args.pending_file) if args.pending_file else DEFAULT_PENDING_FILE
 
     if args.write:
-        if not args.token:
-            print(json.dumps({"success": False, "error": "--token is required for --write"}, ensure_ascii=False))
-            return 1
         if not args.user_query:
             print(json.dumps({"success": False, "error": "--query is required for --write"}, ensure_ascii=False))
             return 1
@@ -108,6 +109,36 @@ def main() -> int:
             log_file=log_file,
         )
         print(json.dumps({"total": len(matches), "matches": matches}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.match_alarm:
+        if not args.device_name:
+            print(json.dumps({"success": False, "error": "--device-name is required for --match-alarm"}, ensure_ascii=False))
+            return 1
+
+        matches = match_alarm_rules(
+            device_name=args.device_name,
+            token=args.token,
+            log_file=log_file,
+        )
+        print(json.dumps({"total": len(matches), "matches": matches}, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.handle_alarm:
+        if not args.device_name:
+            print(json.dumps({"success": False, "error": "--device-name is required for --handle-alarm"}, ensure_ascii=False))
+            return 1
+
+        result = handle_incoming_alarm(
+            device_name=args.device_name,
+            alarm_source=(args.source or "camera"),
+            log_file=log_file,
+        )
+        if not result:
+            print(json.dumps({"success": True, "match": None}, ensure_ascii=False, indent=2))
+            return 0
+
+        print(json.dumps({"success": True, "match": result}, ensure_ascii=False, indent=2))
         return 0
 
     if args.save_pending:
