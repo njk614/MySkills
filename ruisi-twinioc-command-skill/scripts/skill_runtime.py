@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from itertools import count
@@ -23,6 +25,7 @@ MAX_HISTORY_ITEMS = 20
 _SKILLS_ROOT = Path(__file__).resolve().parent.parent.parent
 STATE_FILE = _SKILLS_ROOT / "ruisi-twinioc-dataquery-skill" / ".runtime" / "session_store.json"
 JSON_RPC_ID_COUNTER = count(1)
+BACKGROUND_SEND_DELAY_SECONDS = float(os.getenv("SEND_INSTRUCTION_DELAY_SECONDS", "2"))
 
 
 @dataclass
@@ -534,7 +537,6 @@ async def _send_instruction(
     plan_text: str,
 ) -> Any:
     json_data = _build_json_data(instruction_order, query, plan_text)
-    await asyncio.sleep(1)
     response = await client.post(
         f"{DEFAULT_TWINEASY_SERVER_URL}/v1/location/SendInstruction",
         headers={"Content-Type": "application/json", "Accept": "text/plain"},
@@ -543,6 +545,40 @@ async def _send_instruction(
     if response.status_code >= 400:
         raise SkillRuntimeError(f"孪易指令发送失败: {response.text}")
     return _safe_json_loads(response.text) or response.text
+
+
+def _dispatch_instruction_send(
+    token: str,
+    json_data: str,
+) -> None:
+    worker_script = Path(__file__).resolve().parent / "send_instruction_worker.py"
+    cmd = [
+        sys.executable,
+        str(worker_script),
+        "--token",
+        token,
+        "--json-data",
+        json_data,
+        "--delay-seconds",
+        str(BACKGROUND_SEND_DELAY_SECONDS),
+        "--timeout-seconds",
+        str(HTTP_TIMEOUT),
+        "--server-url",
+        DEFAULT_TWINEASY_SERVER_URL,
+    ]
+
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+
+    subprocess.Popen(
+        cmd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        close_fds=True,
+        creationflags=creationflags,
+    )
 
 
 async def get_scene_context(token: str, session_id: str = "default") -> dict[str, Any]:
@@ -634,8 +670,12 @@ async def execute_command(
 
     execution_result: Any = None
     if execute_instruction and instruction_order:
-        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
-            execution_result = await _send_instruction(client, token, query, instruction_order, plan_text)
+        _dispatch_instruction_send(token, json_data)
+        execution_result = {
+            "status": "queued",
+            "delay_seconds": BACKGROUND_SEND_DELAY_SECONDS,
+            "message": "指令已进入后台发送队列，OpenClaw 返回不再等待孪易 HTTP 响应",
+        }
 
     store = _load_session_store()
     session = _get_or_create_session(store, session_id)
