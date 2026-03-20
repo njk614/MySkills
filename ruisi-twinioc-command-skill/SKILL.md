@@ -244,7 +244,20 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 即将执行：{操作描述，如"打开灯：1F走廊灯"}，请确认是否执行？（是/否）
 ```
 
-用户回复"是"/"确认"/"好"/"好的"/"执行"等肯定词后，再调用执行脚本；用户回复"取消"/"否"/"不"/"算了"等否定词时，不调用脚本，回复"已取消操作"。
+用户回复“是”/“确认”/“好”/“好的”/“执行”等肯定词后，再调用执行脚本；用户回复“取消”/“否”/“不”/“算了”等否定词时，不调用脚本，回复“已取消操作”。
+
+确认后调用执行脚本示例（以确认打开大会议室温控器为例）：
+
+```bash
+python scripts/invoke_skill.py \\
+  --token "<scene-token>" \\
+  --query “打开大会议室温控器” \\
+  --agent-output "[B09：打开温控器：大会议室温控器]"
+```
+
+> **⚠️ 严格要求**：
+> - `--agent-output` 的值**必须**是你本轮生成的实际指令括号串，例如 `[B09：打开温控器：大会议室温控器]`。**绝对禁止**传入 `[instruction_order]`、`[query]`、`[plan_text]` 等任何文档占位符字符串。
+> - `--query` 的值**必须**是用户的原始问题文本（如 `打开大会议室温控器`）。**绝对禁止**传入指令描述文本（如 `打开温控器：大会议室温控器`）或任何含编码前缀的字符串（如 `B09：打开温控器：大会议室温控器`）。
 
 对于温度规则联动场景，这里的“调用执行脚本”前必须先执行：
 
@@ -252,7 +265,7 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>
 ```
 
-- 如果返回存在 `pending.execute_query`，则把它当作本次真正的 `query` 继续生成指令。
+- 如果返回存在 `pending.execute_query`，则把 **`execute_query` 的值**（例如 `打开大会议室温控器`）作为 `--query`，并根据该值重新生成指令括号串（例如 `[B09：打开温控器：大会议室温控器]`）作为 `--agent-output`，再调用执行脚本。
 - 执行完成后，调用：
 
 ```bash
@@ -266,11 +279,13 @@ python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --clear-pe
 所有其他指令（A/C/D/E 系列，以及 B01/B02/B03/B04/B05/B06 等非物理设备指令）统一**直接调用执行脚本，无需等待用户确认**：
 
 ```bash
-python scripts/invoke_skill.py \
-  --token "<scene-token>" \
-  --query "用户原始问题" \
+python scripts/invoke_skill.py \\
+  --token "<scene-token>" \\
+  --query “用户原始问题” \\
   --agent-output "[A03]"
 ```
+
+> **⚠️ 严格要求**：`--agent-output` 的值是你本轮生成的实际指令括号串（如 `[A03]`），`--query` 是用户的原始问题。两者均**禁止**使用文档中出现的任何占位符名称（如 `instruction_order`、`query`、`plan_text`）。
 
 - 如只想验证指令生成而不下发执行，可追加 `--no-execute`
 
@@ -345,6 +360,8 @@ python scripts/invoke_skill.py \
    - 情况三：上述情况二不满足时（即对象不同层级，或两次对象操作之间存在过 A02/A03/A04/A05/A06 中任意一条） 输出必须包含"A02：层级切换：（对象所在层级）"。
 
    特别注意：判断"两次对象操作之间是否有层级切换"时，必须检查上一个对象指令之后到本次请求之间的所有历史指令，只要出现过 A02/A03/A04/A05/A06，就必须输出层级切换，即使当前对象与上一个对象处于同一层级。如果对象名称存在多个层级，默认用第一个出现的层级。
+
+   **补充说明（新 token 场景）：当用户携带一个全新 token 发起对话，第一条消息就是聚焦/选中对象请求时，此时 `history_user` 为空，属于情况一，**必须**在对象指令前输出层级切换 `A02：层级切换：（对象所在层级）`，不得省略。
 
 9. 当用户询问有多少对象/孪生体且不带有某个层级时，应输出所有层级下的孪生体类型以及该类型下的对象名称。
 10. 当用户输入问题跟主题切换相关时，如果主题名称存在，输出的指令必须包含"A01：功能切换：分析&C01：主题切换：（主题名称）"。
