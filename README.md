@@ -4,7 +4,10 @@
 
 当前目录包含：
 
-- [luanyi_interactive_assistant](luanyi_interactive_assistant)：孪易交互助手 Skill 包
+- [ruisi-twinioc-alarm-hook](ruisi-twinioc-alarm-hook)：告警相关 Hook Skill
+- [ruisi-twinioc-command-skill](ruisi-twinioc-command-skill)：命令执行 Skill
+- [ruisi-twinioc-dataquery-skill](ruisi-twinioc-dataquery-skill)：数据查询 Skill
+- [ruisi-twinioc-opeationrule-skill](ruisi-twinioc-opeationrule-skill)：操作规则记录 Skill
 - [Skill-Creator](Skill-Creator)：Skill 创建与打包参考模板
 
 ## 完整 Skill 的推荐结构
@@ -17,15 +20,13 @@ skill-name/
 └── assets/         # 可选
 ```
 
-## 当前孪易交互助手 Skill 结构
+## 示例 Skill 的推荐结构
 
 ```text
-luanyi_interactive_assistant/
+skill-name/
 ├── SKILL.md
 ├── references/
-│  ├── command-rules.md
-│  └── integration.md
-└── scripts/
+└── scripts/        # 可选
    ├── invoke_skill.py
    ├── skill_runtime.py
    └── requirements.txt

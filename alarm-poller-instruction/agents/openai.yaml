@@ -1,4 +1,0 @@
-interface:
-  display_name: "Alarm Poller"
-  short_description: "Poll alarm API every second and send instruction on alarms"
-  default_prompt: "Use $alarm-poller-instruction to poll alarm data every second and trigger SendInstruction when alarm data is detected."
