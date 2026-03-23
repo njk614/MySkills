@@ -1,6 +1,11 @@
 {
     "name": "ruisi-twinioc-alarm-hook",
     "private": true,
+    "openclaw": {
+        "hooks": [
+            "."
+        ]
+    },
     "type": "module",
     "scripts": {
         "start": "node subscriber.mjs"

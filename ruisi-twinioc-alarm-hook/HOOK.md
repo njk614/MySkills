@@ -7,40 +7,38 @@ metadata: { "openclaw": { "emoji": "🚨", "events": ["gateway:startup"], "requi
 
 # 睿思孪易产品告警推送技能包
 
-这个 hook 使用 MQTT 订阅告警 topic，收到告警后调用 OpenClaw `POST /hooks/agent` 推送到客户端，不再调用 `SendInstruction`。
+本 Hook 使用 MQTT 订阅告警消息，并采用“触发与发送解耦”模式：
 
-启动后会：
+1. 固定告警文案通过 `openclaw message send` 直接发送到客户端（文案强约束，不经过 Agent 生成）。
+2. 同一条告警再调用 `POST /hooks/agent`，但使用 `deliver=false` 仅触发规则/skill，不向客户端直发自然语言回复。
 
-1. 连接 MQTT Broker
-2. 订阅配置的告警 topic
-3. 收到消息后按既有规则识别是否有告警
-4. 先按 `BelongToLocationID=dyo6vaow6203kx09` 过滤
-4. 对每个接收方做签名去重
-5. 调用 `POST /hooks/agent` 推送客户端告警消息
+## 固定告警文案规则
 
-## 默认 MQTT 参数
+- 模板：`🚨 通知：{孪生体实例名称} 发生了告警`
+- 多条记录：保持多行输出（每条记录一行）
+- 字段缺失/不合法：丢弃该批次并记录 `invalid_message_template`
 
-- 地址：`mqtts://y9afbaf6.ala.cn-hangzhou.emqxsl.cn:8883`
-- 用户名：`twinioc`
-- 密码：`abc123`
-- Topic：`twineasy/location/dyo6vaow6203kx09/alarm/changed/v1`
+## 去重策略
+
+- `recipientSignatures`：按接收方去重固定文案（发送成功才写入状态）
+- `agentTriggerSignature`：全局去重 skill 触发（触发成功才写入状态）
+
+这样可避免“多接收方导致 skill 重复执行”。
 
 ## 必填配置
 
 - `OPENCLAW_HOOK_TOKEN`
-  调用 `/hooks/agent` 的 token。来源建议为 OpenClaw 主配置 `hooks.token`（并且必须与 `gateway.auth.token` 不同）。
+  - 用于调用 `/hooks/agent`
+  - 应与 OpenClaw 主配置 `hooks.token` 一致
+  - 必须与 `gateway.auth.token` 不同
 - `ALERT_RECIPIENTS_JSON`
-  接收方列表，JSON 数组，元素格式：
-  `{"channel":"...","to":"..."}`
-
-`OPENCLAW_HOOK_TOKEN` 配置关系：
-
-1. 在 OpenClaw 主配置设置 `hooks.token`
-2. 在 `ruisi-twinioc-alarm-hook` 的 `env.OPENCLAW_HOOK_TOKEN` 填同一个值
+  - JSON 数组字符串，元素格式：
+  - `{"channel":"...","to":"..."}`
 
 ## 可选配置
 
 - `OPENCLAW_HOOK_BASE_URL`：默认 `http://127.0.0.1:18789`
+- `OPENCLAW_CLI_BIN`：默认 `openclaw`
 - `MQTT_URL`
 - `MQTT_USERNAME`
 - `MQTT_PASSWORD`
@@ -49,11 +47,10 @@ metadata: { "openclaw": { "emoji": "🚨", "events": ["gateway:startup"], "requi
 - `MQTT_QOS`：`0 | 1 | 2`，默认 `1`
 - `HTTP_TIMEOUT_SECONDS`：默认 `10`
 - `MQTT_LOG_LEVEL`：`info | debug`，默认 `info`
-- `ALERT_TITLE`：默认 `告警通知`
 
-## 推送接口
+## `/hooks/agent` 触发语义
 
-每个接收方会调用：
+Hook 内部调用示例：
 
 ```http
 POST {OPENCLAW_HOOK_BASE_URL}/hooks/agent
@@ -63,43 +60,18 @@ x-openclaw-token: {OPENCLAW_HOOK_TOKEN}
 
 {
   "token": "{OPENCLAW_HOOK_TOKEN}",
-  "message": "🚨 通知：{孪生体实例名称} 发生了告警",
-  "channel": "<channel>",
-  "to": "<to>",
-  "deliver": true
+  "message": "ALARM_TRIGGER\nsignature=...\n...",
+  "deliver": false
 }
 ```
 
-## 告警识别规则
-
-以下字段或结构会被视为有告警：
-
-- `alarmData`
-- `alarms`
-- `alarmList`
-- `items`
-- `records`
-- `rows`
-- `data`
-- `result`
-- `total`
-- `count`
-- `size`
-- `alarmCount`
-- `recordCount`
-
-如果 payload 不是 JSON，只要内容不是空、`null`、`[]`、`{}`、`""`，也会被当作告警消息。
-
-## 去重行为
-
-- 去重粒度是“接收方级别”
-- 状态文件保存 `recipientSignatures`
-- 相同签名只对已成功推送过的接收方跳过
-- 某个接收方失败不会影响其他接收方推送
+说明：
+- `deliver=false` 仅触发规则/skill，不直接给客户端发送 Agent 自然语言回复。
+- 即使触发失败，固定告警文案发送流程仍继续（以告警可见性优先）。
 
 ## 状态文件
 
-运行状态写到工作区：
+工作区目录下：
 
 - `.openclaw-ruisi-twinioc-alarm-hook/subscriber.pid`
 - `.openclaw-ruisi-twinioc-alarm-hook/subscriber.log`

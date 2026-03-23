@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -9,9 +10,14 @@ const DEFAULT_MQTT_PASSWORD = 'abc123';
 const DEFAULT_MQTT_TOPIC = 'twineasy/location/dyo6vaow6203kx09/alarm/changed/v1';
 const TARGET_BELONG_TO_LOCATION_ID = 'dyo6vaow6203kx09';
 const DEFAULT_OPENCLAW_HOOK_BASE_URL = 'http://127.0.0.1:18789';
-const DEFAULT_ALERT_TITLE = '告警通知';
+const DEFAULT_OPENCLAW_CLI_BIN = 'openclaw';
 const PUSH_RETRY_DELAYS_MS = [0, 500, 1500];
 const NO_ALARM_TEXT = new Set(['', 'null', '[]', '{}', '""']);
+const PRIMARY_NAME_KEY = '\u5b6a\u751f\u4f53\u5b9e\u4f8b\u540d\u79f0';
+const FALLBACK_NAME = '\u672a\u77e5\u5bf9\u8c61';
+const FIXED_ALERT_PREFIX = '\u{1F6A8} \u901a\u77e5\uFF1A';
+const FIXED_ALERT_SUFFIX = ' \u53d1\u751f\u4e86\u544a\u8b66';
+const FIXED_ALERT_LINE_PATTERN = /^\u{1F6A8} \u901a\u77e5\uFF1A.+ \u53d1\u751f\u4e86\u544a\u8b66$/u;
 
 const workspaceDir = process.env.WORKSPACE_DIR || process.cwd();
 const stateDir = process.env.ALARM_MQTT_STATE_DIR || path.join(workspaceDir, '.openclaw-ruisi-twinioc-alarm-hook');
@@ -29,9 +35,9 @@ const mqttQos = Number.isInteger(configuredQos) && configuredQos >= 0 && configu
 const httpTimeoutSeconds = Number.parseFloat(process.env.HTTP_TIMEOUT_SECONDS || '10');
 const timeoutMs = Number.isFinite(httpTimeoutSeconds) && httpTimeoutSeconds > 0 ? httpTimeoutSeconds * 1000 : 10000;
 const logLevel = (process.env.MQTT_LOG_LEVEL || 'info').toLowerCase();
-const alertTitle = process.env.ALERT_TITLE || DEFAULT_ALERT_TITLE;
 const openclawHookBaseUrl = (process.env.OPENCLAW_HOOK_BASE_URL || DEFAULT_OPENCLAW_HOOK_BASE_URL).trim();
 const openclawHookToken = (process.env.OPENCLAW_HOOK_TOKEN || '').trim();
+const openclawCliBin = (process.env.OPENCLAW_CLI_BIN || DEFAULT_OPENCLAW_CLI_BIN).trim();
 
 mkdirSync(stateDir, { recursive: true });
 writeFileSync(pidFile, String(process.pid));
@@ -57,6 +63,16 @@ function sleep(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function compactLogValue(value, maxLength = 240) {
+  const text = String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength)}...`;
 }
 
 function buildAgentEndpoint() {
@@ -234,7 +250,7 @@ function parseRecipients() {
 
 function loadConsumerState() {
   if (!existsSync(consumerStateFile)) {
-    return { recipientSignatures: {} };
+    return { recipientSignatures: {}, agentTriggerSignature: '' };
   }
 
   try {
@@ -247,55 +263,24 @@ function loadConsumerState() {
         }
       }
     }
-    return { recipientSignatures };
+
+    const agentTriggerSignature = parsed && typeof parsed === 'object' && typeof parsed.agentTriggerSignature === 'string' ? parsed.agentTriggerSignature : '';
+
+    return { recipientSignatures, agentTriggerSignature };
   } catch {
-    return { recipientSignatures: {} };
+    return { recipientSignatures: {}, agentTriggerSignature: '' };
   }
 }
 
 function saveConsumerState(state) {
   const statePayload = {
     recipientSignatures: state.recipientSignatures,
+    agentTriggerSignature: state.agentTriggerSignature || '',
     updatedAt: new Date().toISOString(),
   };
   const tmpFile = `${consumerStateFile}.tmp`;
   writeFileSync(tmpFile, JSON.stringify(statePayload, null, 2), 'utf8');
   renameSync(tmpFile, consumerStateFile);
-}
-
-function localizeSeverity(rawSeverity) {
-  const text = rawSeverity === null || rawSeverity === undefined ? '' : String(rawSeverity).trim();
-  if (text === '1') {
-    return '特别严重';
-  }
-  if (text === '2') {
-    return '严重';
-  }
-  if (text === '3') {
-    return '较重';
-  }
-  return '一般';
-}
-
-function formatDisplayTime(rawValue, fallbackDate) {
-  const fallback = new Date(fallbackDate);
-  const candidateText = rawValue ? String(rawValue).trim() : '';
-  if (!candidateText) {
-    return formatDisplayTime(fallback.toISOString(), fallback.toISOString());
-  }
-
-  const parsed = new Date(candidateText);
-  if (Number.isNaN(parsed.getTime())) {
-    return candidateText;
-  }
-
-  const yyyy = parsed.getFullYear();
-  const mm = String(parsed.getMonth() + 1).padStart(2, '0');
-  const dd = String(parsed.getDate()).padStart(2, '0');
-  const hh = String(parsed.getHours()).padStart(2, '0');
-  const mi = String(parsed.getMinutes()).padStart(2, '0');
-  const ss = String(parsed.getSeconds()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
 function parseJsonObject(value) {
@@ -370,33 +355,113 @@ function filterRecordsByLocation(records, targetLocationId) {
   });
 }
 
-function buildAlarmCardItem(item) {
+function buildFixedAlertLine(item) {
   const twinContent = parseJsonObject(pickField(item, ['TwinCategoryContent', 'twinCategoryContent']));
-  const twinInstanceName = pickField(twinContent, ['孪生体实例名称']) || '-';
-  return `🚨 通知：${twinInstanceName} 发生了告警`;
+  const rawNameCandidates = [
+    pickField(twinContent, [PRIMARY_NAME_KEY, 'twinInstanceName', 'twin_instance_name', 'name']),
+    pickField(item, ['TwinInstanceName', 'twinInstanceName', 'TwinName', 'twinName', 'DeviceName', 'deviceName', 'Name', 'name']),
+  ];
+
+  let normalizedName = '';
+  for (const rawName of rawNameCandidates) {
+    const candidate = String(rawName ?? '')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (candidate) {
+      normalizedName = candidate;
+      break;
+    }
+  }
+
+  if (!normalizedName) {
+    normalizedName = FALLBACK_NAME;
+  }
+
+  const line = `${FIXED_ALERT_PREFIX}${normalizedName}${FIXED_ALERT_SUFFIX}`;
+  if (!FIXED_ALERT_LINE_PATTERN.test(line)) {
+    return { ok: false, error: 'invalid_fixed_line_pattern' };
+  }
+
+  return { ok: true, line };
 }
 
-function buildAlertMessage(records) {
-  return records.map((item) => buildAlarmCardItem(item)).join('\n');
-}
-
-function buildStrictAgentMessage(rawMessage) {
-  const normalizedMessage = String(rawMessage ?? '')
+function validateFixedAlertMessage(message) {
+  const normalized = String(message ?? '')
     .replace(/\r\n/g, '\n')
     .trim();
+  if (!normalized) {
+    return { ok: false, error: 'empty_fixed_message' };
+  }
+
+  const lines = normalized.split('\n');
+  for (const line of lines) {
+    if (!FIXED_ALERT_LINE_PATTERN.test(line)) {
+      return { ok: false, error: 'invalid_fixed_line_pattern' };
+    }
+  }
+
+  return { ok: true };
+}
+
+function buildFixedAlertMessage(records) {
+  if (!Array.isArray(records) || records.length === 0) {
+    return { ok: false, error: 'no_records_for_fixed_message' };
+  }
+
+  const lines = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const lineResult = buildFixedAlertLine(records[index]);
+    if (!lineResult.ok) {
+      return { ok: false, error: `${lineResult.error}:record_${index}` };
+    }
+    lines.push(lineResult.line);
+  }
+
+  const message = lines.join('\n');
+  const validation = validateFixedAlertMessage(message);
+  if (!validation.ok) {
+    return { ok: false, error: validation.error };
+  }
+
+  return { ok: true, message };
+}
+
+function buildAgentRecordSummary(item, index) {
+  const twinContent = parseJsonObject(pickField(item, ['TwinCategoryContent', 'twinCategoryContent']));
+  return {
+    index,
+    twinInstanceName: pickField(twinContent, [PRIMARY_NAME_KEY, 'twinInstanceName', 'twin_instance_name']),
+    locationId: pickField(item, ['BelongToLocationID', 'belongToLocationID', 'belongToLocationId']),
+    alarmId: pickField(item, ['AlarmID', 'alarmID', 'alarmId', 'id']),
+    severity: pickField(item, ['Severity', 'severity', 'level']),
+    alarmTime: pickField(item, ['AlarmTime', 'alarmTime', 'generationTime', 'timestamp', 'createdAt', 'time']),
+  };
+}
+
+function buildAgentTriggerMessage(topic, signature, records) {
+  const summaries = records.map((item, index) => buildAgentRecordSummary(item, index + 1));
+  const payload = {
+    type: 'alarm_trigger',
+    signature,
+    topic,
+    locationId: TARGET_BELONG_TO_LOCATION_ID,
+    recordCount: records.length,
+    records: summaries,
+  };
 
   return [
-    '你是“纯转发器”，不是助手。',
-    '唯一任务：原样输出指定文本。',
-    '硬性规则：',
-    '1) 只能输出指定文本本体，逐字逐符号一致。',
-    '2) 禁止任何前后缀、禁止解释、禁止总结、禁止改写、禁止润色、禁止提问、禁止建议。',
-    '3) 禁止新增 emoji、项目符号、标题、时间、地点、状态、备注。',
-    '4) 禁止输出“需要我帮你…”等任何引导句。',
-    '5) 若无法遵守，也必须仅输出指定文本本体。',
-    '指定文本开始',
-    normalizedMessage,
-    '指定文本结束',
+    'ALARM_TRIGGER',
+    `signature=${signature}`,
+    `topic=${topic}`,
+    `locationId=${TARGET_BELONG_TO_LOCATION_ID}`,
+    `recordCount=${records.length}`,
+    'visibility=silent',
+    'outputPolicy=NO_REPLY_ONLY',
+    'doNotSendUserVisibleMessages=true',
+    'forbiddenActions=send_message,send_instruction,user_facing_reply',
+    'instruction=Run automation only. Final response must be exactly NO_REPLY.',
+    `payload=${JSON.stringify(payload)}`,
   ].join('\n');
 }
 
@@ -422,15 +487,87 @@ async function postJson(url, payload, extraHeaders = {}) {
   }
 }
 
-async function pushAlertToRecipient(recipient, message) {
+function sendViaOpenclawCli(recipient, message) {
+  return new Promise((resolve) => {
+    const args = ['message', 'send', '--channel', recipient.channel, '--target', recipient.to, '--message', message];
+    const commandDisplay = `${openclawCliBin} ${args.join(' ')}`;
+    const child = spawn(openclawCliBin, args, {
+      windowsHide: true,
+      shell: process.platform === 'win32',
+      env: { ...process.env, OPENCLAW_QUIET: '1' },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      child.kill();
+      resolve({ ok: false, status: -1, responseText: `timeout (${timeoutMs}ms)`, commandDisplay });
+    }, timeoutMs);
+
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ok: false, status: -1, responseText: error.message, commandDisplay });
+    });
+
+    child.on('close', (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      const responseText = stdout.trim() || stderr.trim();
+      resolve({ ok: code === 0, status: code ?? -1, responseText, commandDisplay });
+    });
+  });
+}
+
+async function sendFixedAlertToRecipient(recipient, message, signature) {
+  for (let attempt = 0; attempt < PUSH_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delay = PUSH_RETRY_DELAYS_MS[attempt];
+    if (delay > 0) {
+      await sleep(delay);
+    }
+
+    const result = await sendViaOpenclawCli(recipient, message);
+    log(
+      `flow=fixed_send signature=${signature} attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} ` +
+        `recipient=${recipient.channel}:${recipient.to} status=${result.status} ok=${result.ok} ` +
+        `event=${result.ok ? 'completed' : 'fixed_send_failed'} cmd="${result.commandDisplay}" body="${compactLogValue(result.responseText)}"`
+    );
+
+    if (result.ok) {
+      return { ok: true };
+    }
+  }
+
+  return { ok: false };
+}
+
+async function triggerAgentOnce(topic, signature, records) {
   const endpoint = buildAgentEndpoint();
-  const strictMessage = buildStrictAgentMessage(message);
   const payload = {
     token: openclawHookToken,
-    message: strictMessage,
-    channel: recipient.channel,
-    to: recipient.to,
-    deliver: true,
+    message: buildAgentTriggerMessage(topic, signature, records),
+    deliver: false,
   };
   const authHeaders = {
     Authorization: `Bearer ${openclawHookToken}`,
@@ -448,13 +585,17 @@ async function pushAlertToRecipient(recipient, message) {
       result = await postJson(endpoint, payload, authHeaders);
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error);
-      log(`push mode=hook attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} recipient=${recipient.channel}:${recipient.to} error=${messageText}`);
+      log(
+        `flow=agent_trigger signature=${signature} attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} ` +
+          `ok=false event=agent_trigger_failed error="${compactLogValue(messageText)}"`
+      );
       continue;
     }
 
     log(
-      `push mode=hook attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} endpoint=${endpoint} recipient=${recipient.channel}:${recipient.to} ` +
-        `status=${result.status} ok=${result.ok} body=${result.responseText}`
+      `flow=agent_trigger signature=${signature} attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} ` +
+        `status=${result.status} ok=${result.ok} event=${result.ok ? 'completed' : 'agent_trigger_failed'} ` +
+        `endpoint=${endpoint} body="${compactLogValue(result.responseText)}"`
     );
 
     if (result.ok) {
@@ -485,6 +626,12 @@ if (!openclawHookBaseUrl.startsWith('http://') && !openclawHookBaseUrl.startsWit
 
 if (!openclawHookToken) {
   log('Missing required OPENCLAW_HOOK_TOKEN.');
+  cleanup();
+  process.exit(1);
+}
+
+if (!openclawCliBin) {
+  log('Invalid OPENCLAW_CLI_BIN value.');
   cleanup();
   process.exit(1);
 }
@@ -555,9 +702,17 @@ async function processMessage(topic, payloadBuffer) {
     return;
   }
 
-  const alertMessage = buildAlertMessage(matchedRecords);
   const payloadForState = { BelongToLocationID: TARGET_BELONG_TO_LOCATION_ID, Data: matchedRecords };
   const currentSignature = buildAlarmSignature(topic, payloadForState);
+  const fixedAlertMessage = buildFixedAlertMessage(matchedRecords);
+  if (!fixedAlertMessage.ok) {
+    log(
+      `flow=fixed_send signature=${currentSignature} ok=false event=invalid_message_template ` +
+        `error=${fixedAlertMessage.error} recordCount=${matchedRecords.length}`
+    );
+    return;
+  }
+
   const failedRecipients = [];
   const pushedRecipients = [];
   let stateChanged = false;
@@ -567,11 +722,11 @@ async function processMessage(topic, payloadBuffer) {
     const lastSignature = consumerState.recipientSignatures[key];
 
     if (lastSignature === currentSignature) {
-      log(`Alarm signature unchanged for recipient=${key}, skip push.`);
+      log(`flow=fixed_send signature=${currentSignature} recipient=${key} ok=true event=deduped`);
       continue;
     }
 
-    const result = await pushAlertToRecipient(recipient, alertMessage);
+    const result = await sendFixedAlertToRecipient(recipient, fixedAlertMessage.message, currentSignature);
     if (result.ok) {
       consumerState.recipientSignatures[key] = currentSignature;
       pushedRecipients.push(key);
@@ -581,18 +736,30 @@ async function processMessage(topic, payloadBuffer) {
     }
   }
 
+  if (consumerState.agentTriggerSignature === currentSignature) {
+    log(`flow=agent_trigger signature=${currentSignature} ok=true event=deduped`);
+  } else {
+    const agentResult = await triggerAgentOnce(topic, currentSignature, matchedRecords);
+    if (agentResult.ok) {
+      consumerState.agentTriggerSignature = currentSignature;
+      stateChanged = true;
+    } else {
+      log(`flow=agent_trigger signature=${currentSignature} ok=false event=agent_trigger_failed error=retry_exhausted`);
+    }
+  }
+
   if (stateChanged) {
     saveConsumerState(consumerState);
   }
 
   if (pushedRecipients.length > 0) {
-    log(`Alarm push completed for topic=${topic} recipients=${pushedRecipients.join(',')}`);
+    log(`flow=fixed_send signature=${currentSignature} ok=true event=completed recipients=${pushedRecipients.join(',')}`);
   } else if (failedRecipients.length === 0) {
-    log(`Alarm push skipped for topic=${topic} (all recipients already deduped).`);
+    log(`flow=fixed_send signature=${currentSignature} ok=true event=all_deduped`);
   }
 
   if (failedRecipients.length > 0) {
-    log(`Alarm push failed for topic=${topic} recipients=${failedRecipients.join(',')}`);
+    log(`flow=fixed_send signature=${currentSignature} ok=false event=fixed_send_failed recipients=${failedRecipients.join(',')}`);
   }
 }
 
