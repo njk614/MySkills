@@ -1,8 +1,8 @@
 ---
 name: ruisi-twinioc-alarm-hook
-description: "睿思孪易产品告警推送技能包"
+description: '睿思孪易产品告警推送技能包'
 homepage: https://docs.openclaw.ac.cn/automation/hooks
-metadata: { "openclaw": { "emoji": "🚨", "events": ["gateway:startup"], "requires": { "bins": ["node"], "config": ["workspace.dir"] } } }
+metadata: { 'openclaw': { 'emoji': '🚨', 'events': ['gateway:startup'], 'requires': { 'bins': ['node'], 'config': ['workspace.dir'] } } }
 ---
 
 # 睿思孪易产品告警推送技能包
@@ -11,6 +11,11 @@ metadata: { "openclaw": { "emoji": "🚨", "events": ["gateway:startup"], "requi
 
 1. 固定告警文案通过 `openclaw message send` 直接发送到客户端（文案强约束，不经过 Agent 生成）。
 2. 同一条告警再调用 `POST /hooks/agent`，但使用 `deliver=false` 仅触发规则/skill，不向客户端直发自然语言回复。
+
+当收到告警后，还会去匹配 `ruisi-twinioc-opeationrule-skill` 中记录的告警规则：
+
+- 命中规则时，发送规则对应的确认话术，并写入待确认动作，后续由确认流程继续处理。
+- 未命中规则时，保持原有告警推送与 agent 触发行为不变。
 
 ## 固定告警文案规则
 
@@ -29,8 +34,8 @@ metadata: { "openclaw": { "emoji": "🚨", "events": ["gateway:startup"], "requi
 
 - `OPENCLAW_HOOK_TOKEN`
   - 用于调用 `/hooks/agent`
+  - 值与 TwinEasy token 使用同一串 token
   - 应与 OpenClaw 主配置 `hooks.token` 一致
-  - 必须与 `gateway.auth.token` 不同
 - `ALERT_RECIPIENTS_JSON`
   - JSON 数组字符串，元素格式：
   - `{"channel":"...","to":"..."}`
@@ -66,6 +71,7 @@ x-openclaw-token: {OPENCLAW_HOOK_TOKEN}
 ```
 
 说明：
+
 - `deliver=false` 仅触发规则/skill，不直接给客户端发送 Agent 自然语言回复。
 - 即使触发失败，固定告警文案发送流程仍继续（以告警可见性优先）。
 

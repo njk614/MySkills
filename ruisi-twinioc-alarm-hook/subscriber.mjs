@@ -250,12 +250,13 @@ function parseRecipients() {
 
 function loadConsumerState() {
   if (!existsSync(consumerStateFile)) {
-    return { recipientSignatures: {}, agentTriggerSignature: '' };
+    return { recipientSignatures: {}, alarmConfirmationSignatures: {}, agentTriggerSignature: '' };
   }
 
   try {
     const parsed = JSON.parse(readFileSync(consumerStateFile, 'utf8'));
     const recipientSignatures = {};
+    const alarmConfirmationSignatures = {};
     if (parsed && typeof parsed === 'object' && parsed.recipientSignatures && typeof parsed.recipientSignatures === 'object') {
       for (const [key, value] of Object.entries(parsed.recipientSignatures)) {
         if (typeof value === 'string' && value) {
@@ -264,17 +265,26 @@ function loadConsumerState() {
       }
     }
 
+    if (parsed && typeof parsed === 'object' && parsed.alarmConfirmationSignatures && typeof parsed.alarmConfirmationSignatures === 'object') {
+      for (const [key, value] of Object.entries(parsed.alarmConfirmationSignatures)) {
+        if (typeof value === 'string' && value) {
+          alarmConfirmationSignatures[key] = value;
+        }
+      }
+    }
+
     const agentTriggerSignature = parsed && typeof parsed === 'object' && typeof parsed.agentTriggerSignature === 'string' ? parsed.agentTriggerSignature : '';
 
-    return { recipientSignatures, agentTriggerSignature };
+    return { recipientSignatures, alarmConfirmationSignatures, agentTriggerSignature };
   } catch {
-    return { recipientSignatures: {}, agentTriggerSignature: '' };
+    return { recipientSignatures: {}, alarmConfirmationSignatures: {}, agentTriggerSignature: '' };
   }
 }
 
 function saveConsumerState(state) {
   const statePayload = {
     recipientSignatures: state.recipientSignatures,
+    alarmConfirmationSignatures: state.alarmConfirmationSignatures,
     agentTriggerSignature: state.agentTriggerSignature || '',
     updatedAt: new Date().toISOString(),
   };
@@ -303,6 +313,26 @@ function parseJsonObject(value) {
   } catch {
     return null;
   }
+}
+
+function extractAlarmTwinName(item) {
+  const twinContent = parseJsonObject(pickField(item, ['TwinCategoryContent', 'twinCategoryContent']));
+  const rawNameCandidates = [
+    pickField(twinContent, [PRIMARY_NAME_KEY, 'twinInstanceName', 'twin_instance_name', 'name']),
+    pickField(item, ['TwinInstanceName', 'twinInstanceName', 'TwinName', 'twinName', 'DeviceName', 'deviceName', 'Name', 'name']),
+  ];
+
+  for (const rawName of rawNameCandidates) {
+    const candidate = String(rawName ?? '')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return '';
 }
 
 function extractAlarmRecords(payloadObject) {
@@ -356,23 +386,7 @@ function filterRecordsByLocation(records, targetLocationId) {
 }
 
 function buildFixedAlertLine(item) {
-  const twinContent = parseJsonObject(pickField(item, ['TwinCategoryContent', 'twinCategoryContent']));
-  const rawNameCandidates = [
-    pickField(twinContent, [PRIMARY_NAME_KEY, 'twinInstanceName', 'twin_instance_name', 'name']),
-    pickField(item, ['TwinInstanceName', 'twinInstanceName', 'TwinName', 'twinName', 'DeviceName', 'deviceName', 'Name', 'name']),
-  ];
-
-  let normalizedName = '';
-  for (const rawName of rawNameCandidates) {
-    const candidate = String(rawName ?? '')
-      .replace(/\r?\n/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (candidate) {
-      normalizedName = candidate;
-      break;
-    }
-  }
+  let normalizedName = extractAlarmTwinName(item);
 
   if (!normalizedName) {
     normalizedName = FALLBACK_NAME;
@@ -428,10 +442,9 @@ function buildFixedAlertMessage(records) {
 }
 
 function buildAgentRecordSummary(item, index) {
-  const twinContent = parseJsonObject(pickField(item, ['TwinCategoryContent', 'twinCategoryContent']));
   return {
     index,
-    twinInstanceName: pickField(twinContent, [PRIMARY_NAME_KEY, 'twinInstanceName', 'twin_instance_name']),
+    twinInstanceName: extractAlarmTwinName(item),
     locationId: pickField(item, ['BelongToLocationID', 'belongToLocationID', 'belongToLocationId']),
     alarmId: pickField(item, ['AlarmID', 'alarmID', 'alarmId', 'id']),
     severity: pickField(item, ['Severity', 'severity', 'level']),
@@ -541,6 +554,14 @@ function sendViaOpenclawCli(recipient, message) {
 }
 
 async function sendFixedAlertToRecipient(recipient, message, signature) {
+  return sendMessageToRecipient('fixed_send', recipient, message, signature);
+}
+
+async function sendAlarmConfirmationToRecipient(recipient, message, signature) {
+  return sendMessageToRecipient('alarm_confirm', recipient, message, signature);
+}
+
+async function sendMessageToRecipient(flow, recipient, message, signature) {
   for (let attempt = 0; attempt < PUSH_RETRY_DELAYS_MS.length; attempt += 1) {
     const delay = PUSH_RETRY_DELAYS_MS[attempt];
     if (delay > 0) {
@@ -548,10 +569,11 @@ async function sendFixedAlertToRecipient(recipient, message, signature) {
     }
 
     const result = await sendViaOpenclawCli(recipient, message);
+    const eventName = result.ok ? 'completed' : `${flow}_failed`;
     log(
-      `flow=fixed_send signature=${signature} attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} ` +
+      `flow=${flow} signature=${signature} attempt=${attempt + 1}/${PUSH_RETRY_DELAYS_MS.length} ` +
         `recipient=${recipient.channel}:${recipient.to} status=${result.status} ok=${result.ok} ` +
-        `event=${result.ok ? 'completed' : 'fixed_send_failed'} cmd="${result.commandDisplay}" body="${compactLogValue(result.responseText)}"`
+        `event=${eventName} cmd="${result.commandDisplay}" body="${compactLogValue(result.responseText)}"`
     );
 
     if (result.ok) {
@@ -560,6 +582,97 @@ async function sendFixedAlertToRecipient(recipient, message, signature) {
   }
 
   return { ok: false };
+}
+
+function getOperationRuleRecorderScript() {
+  return path.join(workspaceDir, 'ruisi-twinioc-opeationrule-skill', 'scripts', 'invoke_recorder.py');
+}
+
+function runPythonRecorder(args) {
+  return new Promise((resolve) => {
+    const child = spawn('python3', args, {
+      windowsHide: true,
+      shell: process.platform === 'win32',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr?.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', (error) => {
+      resolve({ ok: false, stdout: stdout.trim(), stderr: stderr.trim() || (error instanceof Error ? error.message : String(error)) });
+    });
+
+    child.on('close', (code) => {
+      resolve({ ok: code === 0, stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
+async function matchAlarmRuleForRecord(token, record) {
+  const deviceName = extractAlarmTwinName(record);
+  if (!deviceName) {
+    return null;
+  }
+
+  const recorderScript = getOperationRuleRecorderScript();
+  const result = await runPythonRecorder(['-X', 'utf8', recorderScript, '--handle-alarm', '--token', token, '--source', 'alarm', '--device-name', deviceName]);
+
+  if (!result.ok || !result.stdout) {
+    if (result.stderr) {
+      log(`flow=alarm_rule_match device=${deviceName} ok=false error="${compactLogValue(result.stderr)}"`);
+    }
+    return null;
+  }
+
+  const parsed = tryParseJson(result.stdout);
+  const match = parsed && typeof parsed === 'object' ? parsed.match : null;
+  if (!match || typeof match !== 'object') {
+    return null;
+  }
+
+  return match;
+}
+
+async function saveAlarmPendingConfirmation(token, matchedRule) {
+  const executeQuery = String(matchedRule?.execute_query || '').trim();
+  if (!executeQuery) {
+    return false;
+  }
+
+  const confirmationText = String(matchedRule?.confirmation_text || '').trim();
+  const recorderScript = getOperationRuleRecorderScript();
+  const result = await runPythonRecorder([
+    '-X',
+    'utf8',
+    recorderScript,
+    '--save-pending',
+    '--token',
+    token,
+    '--source',
+    'alarm',
+    '--confirmation-text',
+    confirmationText,
+    '--execute-query',
+    executeQuery,
+    '--matched-rule-json',
+    JSON.stringify(matchedRule),
+  ]);
+
+  if (!result.ok) {
+    log(`flow=alarm_rule_pending ok=false error="${compactLogValue(result.stderr || result.stdout)}"`);
+    return false;
+  }
+
+  return true;
 }
 
 async function triggerAgentOnce(topic, signature, records) {
@@ -736,7 +849,56 @@ async function processMessage(topic, payloadBuffer) {
     }
   }
 
-  if (consumerState.agentTriggerSignature === currentSignature) {
+  let matchedAlarmRule = null;
+  for (const record of matchedRecords) {
+    matchedAlarmRule = await matchAlarmRuleForRecord(openclawHookToken, record);
+    if (matchedAlarmRule) {
+      break;
+    }
+  }
+
+  if (matchedAlarmRule) {
+    const pendingSaved = await saveAlarmPendingConfirmation(openclawHookToken, matchedAlarmRule);
+    if (pendingSaved) {
+      const confirmationMessage = String(matchedAlarmRule.confirmation_text || '').trim();
+      const confirmationSignature = `${currentSignature}:alarm-confirmation`;
+      const confirmationFailedRecipients = [];
+
+      for (const recipient of recipients) {
+        const key = recipientKey(recipient);
+        const lastSignature = consumerState.alarmConfirmationSignatures[key];
+
+        if (lastSignature === confirmationSignature) {
+          log(`flow=alarm_confirm signature=${confirmationSignature} recipient=${key} ok=true event=deduped`);
+          continue;
+        }
+
+        const result = await sendAlarmConfirmationToRecipient(recipient, confirmationMessage, confirmationSignature);
+        if (result.ok) {
+          consumerState.alarmConfirmationSignatures[key] = confirmationSignature;
+          stateChanged = true;
+        } else {
+          confirmationFailedRecipients.push(key);
+        }
+      }
+
+      if (confirmationFailedRecipients.length > 0) {
+        log(`flow=alarm_confirm signature=${confirmationSignature} ok=false event=alarm_confirm_failed recipients=${confirmationFailedRecipients.join(',')}`);
+      } else {
+        log(`flow=alarm_confirm signature=${confirmationSignature} ok=true event=completed`);
+      }
+    } else if (consumerState.agentTriggerSignature === currentSignature) {
+      log(`flow=agent_trigger signature=${currentSignature} ok=true event=deduped`);
+    } else {
+      const agentResult = await triggerAgentOnce(topic, currentSignature, matchedRecords);
+      if (agentResult.ok) {
+        consumerState.agentTriggerSignature = currentSignature;
+        stateChanged = true;
+      } else {
+        log(`flow=agent_trigger signature=${currentSignature} ok=false event=agent_trigger_failed error=retry_exhausted`);
+      }
+    }
+  } else if (consumerState.agentTriggerSignature === currentSignature) {
     log(`flow=agent_trigger signature=${currentSignature} ok=true event=deduped`);
   } else {
     const agentResult = await triggerAgentOnce(topic, currentSignature, matchedRecords);

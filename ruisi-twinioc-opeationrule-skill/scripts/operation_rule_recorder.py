@@ -23,6 +23,11 @@ _TEMPERATURE_RULE_PATTERN = re.compile(
     r"(?:时|后|的话|的时候|则|就)?[，,、\s]*(?P<action>.+)",
 )
 
+_ALARM_RULE_PATTERN = re.compile(
+    r"(?:当|如果)?\s*(?P<device>.*?)\s*(?:产生|发生)?\s*告警\s*"
+    r"(?:时|后|的话|的时候|则|就)?[，,、\s]*(?P<action>.+)",
+)
+
 _OPERATOR_ALIASES: dict[str, tuple[str, str]] = {
     ">": ("gt", "大于"),
     "大于": ("gt", "大于"),
@@ -99,6 +104,27 @@ def parse_temperature_rule(query: str) -> dict[str, Any] | None:
     }
 
 
+def parse_alarm_rule(query: str) -> dict[str, Any] | None:
+    match = _ALARM_RULE_PATTERN.search(str(query or "").strip())
+    if not match:
+        return None
+
+    device_name = match.group("device").strip().strip("，,。；; ")
+    if not device_name:
+        return None
+
+    action_text = _normalize_action_text(match.group("action"))
+    if not action_text:
+        return None
+
+    return {
+        "kind": "alarm_trigger",
+        "device_name": device_name,
+        "action_text": action_text,
+        "execute_query": _build_execute_query(device_name, action_text),
+    }
+
+
 def _compare_temperature(current: float, operator: str, threshold: float) -> bool:
     if operator == "gt":
         return current > threshold
@@ -126,12 +152,14 @@ def _build_confirmation_text(device_name: str, temperature: float, parsed_rule: 
 
 
 def _record_with_parsed_rule(record: dict[str, Any]) -> dict[str, Any]:
-    if record.get("source") != "temperature":
+    source = record.get("source")
+    if source not in {"temperature", "alarm"}:
         return record
     if isinstance(record.get("parsed_rule"), dict):
         return record
 
-    parsed_rule = parse_temperature_rule(str(record.get("query") or ""))
+    query_text = str(record.get("query") or "")
+    parsed_rule = parse_temperature_rule(query_text) if source == "temperature" else parse_alarm_rule(query_text)
     if not parsed_rule:
         return record
 
@@ -184,8 +212,8 @@ def write_record(
         "source": source,
         "query": query,
     }
-    if source == "temperature":
-        parsed_rule = parse_temperature_rule(query)
+    if source in {"temperature", "alarm"}:
+        parsed_rule = parse_temperature_rule(query) if source == "temperature" else parse_alarm_rule(query)
         if parsed_rule:
             record["parsed_rule"] = parsed_rule
 
@@ -319,15 +347,31 @@ def match_alarm_rules(
         if record.get("source") != "alarm":
             continue
 
+        enriched_record = _record_with_parsed_rule(record)
+        parsed_rule = enriched_record.get("parsed_rule")
+        rule_device_name = ""
+        if isinstance(parsed_rule, dict):
+            rule_device_name = str(parsed_rule.get("device_name") or "")
+        normalized_rule_device_name = _normalize_text(rule_device_name)
+
         query_text = str(record.get("query") or "")
         normalized_query = _normalize_text(query_text)
 
         if not normalized_device_name:
             continue
 
-        # simple substring match (both directions)
-        if normalized_device_name in normalized_query or normalized_query in normalized_device_name:
-            matched_record = {k: v for k, v in record.items() if k != "token"}
+        # Prefer structured device matching when available, then fall back to raw query substring matching.
+        structured_match = False
+        if normalized_rule_device_name:
+            structured_match = (
+                normalized_device_name in normalized_rule_device_name
+                or normalized_rule_device_name in normalized_device_name
+            )
+
+        raw_query_match = normalized_device_name in normalized_query or normalized_query in normalized_device_name
+
+        if structured_match or raw_query_match:
+            matched_record = {k: v for k, v in enriched_record.items() if k != "token"}
             matches.append(matched_record)
 
     if not matches:
@@ -357,16 +401,25 @@ def handle_incoming_alarm(
     latest = matches[0]
 
     # Try to extract an actionable instruction from the matched query
-    action_text, execute_query = _parse_alarm_action(latest.get("query", ""), device_name)
+    enriched_latest = _record_with_parsed_rule(latest)
+    parsed_rule = enriched_latest.get("parsed_rule")
+    if isinstance(parsed_rule, dict):
+        action_text = str(parsed_rule.get("action_text") or "").strip()
+        execute_query = str(parsed_rule.get("execute_query") or "").strip()
+    else:
+        action_text, execute_query = None, None
+
+    if not action_text or not execute_query:
+        action_text, execute_query = _parse_alarm_action(latest.get("query", ""), device_name)
     if action_text:
-        latest = dict(latest)
+        latest = dict(enriched_latest)
         latest["action_text"] = action_text
         latest["execute_query"] = execute_query
         latest["confirmation_text"] = f"检测到{device_name}告警，{action_text}，请确认是否执行？"
         return latest
 
     # Fallback: return the matched record with a generic confirmation asking user to confirm the recorded query
-    latest = dict(latest)
+    latest = dict(enriched_latest)
     latest["confirmation_text"] = f"检测到{device_name}告警，匹配到记录：{latest.get('query')}，请确认是否执行？"
     latest["execute_query"] = latest.get("query")
     return latest
