@@ -665,6 +665,7 @@ async def execute_command(
     if not agent_output:
         raise SkillRuntimeError("agent_output 不能为空")
 
+    # 解析 agent_output，生成中文展示文本(plan_text) 与执行指令串(instruction_order)
     plan_text, instruction_order = _build_execution_plan(agent_text=agent_output)
     json_data = _build_json_data(instruction_order, query, plan_text)
 

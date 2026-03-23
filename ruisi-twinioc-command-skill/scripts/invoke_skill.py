@@ -60,7 +60,9 @@ async def main() -> int:
         if args.debug:
             import sys
             print(json.dumps(result, ensure_ascii=False, indent=2), file=sys.stderr)
-        print(result.get("plan_text", ""))
+        # 返回固定 JSON 给前端（不包含分隔标记）
+        out = json.dumps({"message": result.get("plan_text", "")}, ensure_ascii=False, indent=2)
+        print(out)
         return 0
     except SkillRuntimeError as exc:
         print(
