@@ -121,7 +121,7 @@ def parse_alarm_rule(query: str) -> dict[str, Any] | None:
         "kind": "alarm_trigger",
         "device_name": device_name,
         "action_text": action_text,
-        "execute_query": _build_execute_query(device_name, action_text),
+        "execute_query": action_text,
     }
 
 
