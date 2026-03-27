@@ -1,0 +1,484 @@
+openapi: 3.0.3
+info:
+  title: Ruisi Skills API (Draft)
+  description: 'Design-first API baseline for the ruisi skill suite. Use as source-of-truth for ruisi Skill implementations.'
+  version: v1
+servers:
+  - url: https://api.example.com
+
+paths:
+  /v1/skills/data/query:
+    post:
+      summary: Data query (temperature, scene, twin lists, video names)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataQueryRequest'
+      responses:
+        '200':
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataQueryResponse'
+
+  /v1/skills/command/invoke:
+    post:
+      summary: Convert NL to instruction and optionally execute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandInvokeRequest'
+      responses:
+        '200':
+          description: Synchronous response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommandInvokeResponse'
+        '202':
+          description: Accepted (async task created)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedResponse'
+
+  /v1/skills/operation-rule/record:
+    post:
+      summary: Record a rule or save pending confirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationRecordRequest'
+      responses:
+        '200':
+          description: Record saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationRecordResponse'
+
+  /v1/skills/operation-rule/match-temperature:
+    post:
+      summary: Match temperature value to recorded rules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchTemperatureRequest'
+      responses:
+        '200':
+          description: Match result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchTemperatureResponse'
+
+  /v1/tasks/{task_id}:
+    get:
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatus'
+
+  /v1/hooks/alarm:
+    post:
+      summary: Receive an alarm event and trigger internal hooks/skills
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookRequest'
+      responses:
+        '200':
+          description: Alarm processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookResponse'
+
+  /v1/hooks/agent:
+    post:
+      summary: Forward event to agent hook (deliver=false to only trigger skills)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookRequest'
+      responses:
+        '200':
+          description: Hook forwarded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookResponse'
+
+  /v1/skills/operation-rule/pending:
+    get:
+      summary: Get current pending confirmation action
+      parameters:
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pending confirmation or empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingResponse'
+    delete:
+      summary: Clear pending confirmation action
+      parameters:
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /v1/skills/operation-rule/query:
+    get:
+      summary: Query recorded operation rules / history
+      parameters:
+        - in: query
+          name: token
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: source
+          required: false
+          schema:
+            type: string
+            enum: [alarm, temperature, schedule]
+        - in: query
+          name: last
+          required: false
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Query result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationQueryResponse'
+
+  /v1/tasks/{task_id}/cancel:
+    post:
+      summary: Cancel an async task
+      parameters:
+        - in: path
+          name: task_id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+components:
+  schemas:
+    DataQueryRequest:
+      type: object
+      description: 'type=temperature 查询温度传感器；type=mcp 调用 MCP 工具（需附带 mcp_tool）'
+      properties:
+        request_id:
+          type: string
+        token:
+          type: string
+        type:
+          type: string
+          enum: [temperature, mcp]
+        mcp_tool:
+          type: string
+          enum: [get_scene_info, get_scene_context, get_twin_category_data, get_twin_category, get_bind_video_instance_names]
+          description: 'type=mcp 时必填'
+        mcp_args:
+          type: object
+          description: 'MCP 工具参数，如 {"twinCategoryName": "可控摄像头"}'
+        device_query:
+          type: string
+          description: 'type=temperature 时，按安装位置或孪生体实例名称模糊匹配；不传则使用默认设备台账'
+      required: [request_id, token, type]
+
+    DataQueryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        reply:
+          type: string
+        data:
+          type: object
+        rule_match:
+          type: object
+
+    CommandInvokeRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+        token:
+          type: string
+        query:
+          type: string
+          description: '用户原始自然语言问题'
+        agent_output:
+          type: string
+          description: 'AI 生成的指令串（instruction_order），如 A09 或 A36：告警信息：当前$&A38：告警信息选中'
+        plan_text:
+          type: string
+          description: '中文展示文本（不含 A/B/C/D 编码），对应 jsonData 第三段'
+        context:
+          type: object
+        confirm_required:
+          type: boolean
+      required: [request_id, token, query]
+
+    CommandInvokeResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+
+    AcceptedResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        task_id:
+          type: string
+
+    OperationRecordRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+        token:
+          type: string
+        source:
+          type: string
+          enum: [alarm, temperature, schedule]
+        query:
+          type: string
+        parsed_rule:
+          type: object
+      required: [request_id, token, source, query]
+
+    OperationRecordResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        record:
+          type: object
+
+    MatchTemperatureRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+        token:
+          type: string
+        device_name:
+          type: string
+        temperature:
+          type: number
+      required: [request_id, token, device_name, temperature]
+
+    MatchTemperatureResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        matches:
+          type: array
+          items:
+            type: object
+        confirmation_text:
+          type: string
+
+    HookRequest:
+      type: object
+      properties:
+        request_id:
+          type: string
+        token:
+          type: string
+        alarm_id:
+          type: string
+        device_name:
+          type: string
+        message:
+          type: string
+        deliver:
+          type: boolean
+      required: [request_id, token, message]
+
+    HookResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        triggered:
+          type: boolean
+        details:
+          type: object
+
+    TaskStatus:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+        result:
+          type: object
+
+    ParsedTemperatureRule:
+      type: object
+      description: '温度规则结构化条件'
+      properties:
+        device_name:
+          type: string
+        operator:
+          type: string
+          enum: [gt, lt, gte, lte, eq]
+        operator_text:
+          type: string
+          description: '操作符中文文本，如大于'
+        threshold:
+          type: number
+        action_text:
+          type: string
+          description: '动作中文描述，如关闭照明灯'
+        execute_query:
+          type: string
+          description: '可直接执行的自然语言查询，如关闭大厅东侧照明灯'
+
+    ParsedAlarmRule:
+      type: object
+      description: '告警规则结构化条件（device_name 为摄像头孪生体实例名称）'
+      properties:
+        device_name:
+          type: string
+        action_text:
+          type: string
+        execute_query:
+          type: string
+
+    PendingConfirmation:
+      type: object
+      description: '待确认动作存储结构'
+      properties:
+        token:
+          type: string
+        matched_rule:
+          type: object
+          properties:
+            source:
+              type: string
+              enum: [temperature, alarm]
+            query:
+              type: string
+            confirmation_text:
+              type: string
+            parsed_rule:
+              oneOf:
+                - $ref: '#/components/schemas/ParsedTemperatureRule'
+                - $ref: '#/components/schemas/ParsedAlarmRule'
+
+    PendingResponse:
+      type: object
+      properties:
+        has_pending:
+          type: boolean
+        pending:
+          $ref: '#/components/schemas/PendingConfirmation'
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+
+    OperationQueryResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        records:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              source:
+                type: string
+                enum: [alarm, temperature, schedule]
+              query:
+                type: string
+              instruction:
+                type: string
+              parsed_rule:
+                type: object
+              timestamp:
+                type: string
+                format: date-time
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API-Key
+
+security:
+  - ApiKeyAuth: []
