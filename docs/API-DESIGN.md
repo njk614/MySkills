@@ -154,8 +154,11 @@
 
 > 以下为 Skill 层内部调用的 TwinIoC 平台原始接口，**不对外直接暴露**，所有 AI 调用均通过统一 `/v1/*` 层。
 
-- **MCP 基础路径**：`http://test.twinioc.net/api/editor/mcp`（JSON-RPC，协议版本 `2025-03-26`）
-- **SendInstruction**：`POST http://test.twinioc.net/api/editor/v1/location/SendInstruction`
+- **默认基础地址**：`http://test.twinioc.net`
+- **地址拼接规则**：未显式传入基础地址时，默认使用 `http://test.twinioc.net`；如果传入了基础地址，则使用该地址继续拼接后续固定路径。
+
+- **MCP 基础路径**：`{base-url}/api/editor/mcp`（JSON-RPC，协议版本 `2025-03-26`）
+- **SendInstruction**：`POST {base-url}/api/editor/v1/location/SendInstruction`
   - Header：`Content-Type: application/json`，`Accept: text/plain`
   - Body：`{ "token": "...", "jsonData": "instruction_order$&query$&plan_text" }`
 

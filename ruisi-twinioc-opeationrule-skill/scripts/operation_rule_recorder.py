@@ -13,6 +13,7 @@ from typing import Any
 
 DEFAULT_LOG_FILE = Path(__file__).resolve().parent.parent / ".logs" / "operations.jsonl"
 DEFAULT_PENDING_FILE = Path(__file__).resolve().parent.parent / ".runtime" / "pending_confirmations.json"
+ENTITY_ALIAS_FILE = Path(__file__).resolve().parent.parent.parent / "ruisi-twinioc-dataquery-skill" / "entity_aliases.json"
 VALID_SOURCES = {"alarm", "temperature", "schedule"}
 MAX_RECORDS_PER_SOURCE = 100
 
@@ -28,6 +29,20 @@ _ALARM_RULE_PATTERN = re.compile(
     r"(?:时|后|的话|的时候|则|就)?[，,、\s]*(?P<action>.+)",
 )
 
+_TEMPERATURE_RULE_PATTERN_EN = re.compile(
+    r"(?:when|if)?\s*(?:the\s+)?(?P<device>.*?)\s+temperature\s+"
+    r"(?:is\s+)?(?P<operator>greater\s+than\s+or\s+equal\s+to|less\s+than\s+or\s+equal\s+to|greater\s+than|less\s+than|above|below|>=|<=|>|<|equal\s+to|equals|=)\s*"
+    r"(?P<threshold>-?\d+(?:\.\d+)?)\s*(?:°c|c|degrees?)?\s*"
+    r"(?:then)?[，,、\s]*(?P<action>.+)",
+    re.IGNORECASE,
+)
+
+_ALARM_RULE_PATTERN_EN = re.compile(
+    r"(?:when|if)?\s*(?:the\s+)?(?P<device>.*?(?:\s+camera)?)\s+alarm(?:\s+occurs|\s+happens|\s+is\s+triggered)?\s*"
+    r"(?:then)?[，,、\s]*(?P<action>.+)",
+    re.IGNORECASE,
+)
+
 _OPERATOR_ALIASES: dict[str, tuple[str, str]] = {
     ">": ("gt", "大于"),
     "大于": ("gt", "大于"),
@@ -40,16 +55,69 @@ _OPERATOR_ALIASES: dict[str, tuple[str, str]] = {
     ">=": ("gte", "大于等于"),
     "大于等于": ("gte", "大于等于"),
     "不低于": ("gte", "大于等于"),
+    "greater than or equal to": ("gte", "大于等于"),
     "<=": ("lte", "小于等于"),
     "小于等于": ("lte", "小于等于"),
     "不高于": ("lte", "小于等于"),
+    "less than or equal to": ("lte", "小于等于"),
     "=": ("eq", "等于"),
     "等于": ("eq", "等于"),
+    "greater than": ("gt", "大于"),
+    "above": ("gt", "大于"),
+    "less than": ("lt", "小于"),
+    "below": ("lt", "小于"),
+    "equal to": ("eq", "等于"),
+    "equals": ("eq", "等于"),
+}
+
+_ZH_ACTION_TRANSLATIONS: dict[str, str] = {
+    "turn on the lights": "打开照明灯",
+    "turn off the lights": "关闭照明灯",
+    "turn on the air conditioner": "打开温控器",
+    "turn off the air conditioner": "关闭温控器",
+    "reset the scene": "场景复位",
 }
 
 
 def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", "", str(value or "")).lower()
+
+
+def _list_values(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _load_entity_alias_entries() -> list[dict[str, Any]]:
+    if not ENTITY_ALIAS_FILE.exists():
+        return []
+    try:
+        parsed = json.loads(ENTITY_ALIAS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if isinstance(parsed, list):
+        return [item for item in parsed if isinstance(item, dict)]
+    if isinstance(parsed, dict):
+        return [value for value in parsed.values() if isinstance(value, dict)]
+    return []
+
+
+def _resolve_standard_name(value: str) -> str:
+    normalized_value = _normalize_text(value)
+    if not normalized_value:
+        return str(value or "").strip()
+    for entry in _load_entity_alias_entries():
+        candidates = [
+            str(entry.get("system_name") or ""),
+            str(entry.get("display_name_en") or ""),
+            *_list_values(entry.get("aliases_zh")),
+            *_list_values(entry.get("aliases_en")),
+        ]
+        normalized_candidates = {_normalize_text(candidate) for candidate in candidates if candidate}
+        if normalized_value in normalized_candidates:
+            return str(entry.get("system_name") or entry.get("display_name_en") or value).strip()
+    return str(value or "").strip()
 
 
 def _normalize_threshold_text(value: float) -> str:
@@ -59,13 +127,39 @@ def _normalize_threshold_text(value: float) -> str:
 
 
 def _normalize_action_text(action: str) -> str:
-    cleaned = re.sub(r"^(请|帮我|帮忙|麻烦|需要|要|将)", "", action.strip())
+    cleaned = re.sub(r"^(请|帮我|帮忙|麻烦|需要|要|将|please\s+|help\s+me\s+|kindly\s+)", "", action.strip(), flags=re.IGNORECASE)
     cleaned = cleaned.strip("，,。；; ")
     return cleaned or action.strip()
 
 
+def _clean_rule_device_name(device_name: str) -> str:
+    cleaned = str(device_name or "").strip().strip("，,。；; ")
+    cleaned = re.sub(r"的$", "", cleaned)
+    return cleaned.strip()
+
+
+def _translate_action_text_for_zh(action_text: str) -> str:
+    raw = str(action_text or "").strip()
+    lowered = raw.lower()
+    if lowered in _ZH_ACTION_TRANSLATIONS:
+        return _ZH_ACTION_TRANSLATIONS[lowered]
+    if lowered.startswith("turn off") and "light" in lowered:
+        return "关闭照明灯"
+    if lowered.startswith("turn on") and "light" in lowered:
+        return "打开照明灯"
+    if lowered.startswith("turn off") and any(keyword in lowered for keyword in ("air conditioner", "ac", "hvac")):
+        return "关闭温控器"
+    if lowered.startswith("turn on") and any(keyword in lowered for keyword in ("air conditioner", "ac", "hvac")):
+        return "打开温控器"
+    if "reset" in lowered and "scene" in lowered:
+        return "场景复位"
+    return raw
+
+
 def _build_execute_query(device_name: str, action_text: str) -> str:
-    if not device_name or device_name in action_text:
+    normalized_device_name = _normalize_text(device_name)
+    normalized_action_text = _normalize_text(action_text)
+    if not device_name or (normalized_device_name and normalized_device_name in normalized_action_text):
         return action_text
 
     action = action_text.strip()
@@ -73,17 +167,31 @@ def _build_execute_query(device_name: str, action_text: str) -> str:
     if match:
         verb = match.group(1)
         target = match.group(2).strip()
+        if normalized_device_name and normalized_device_name in _normalize_text(target):
+            return action_text
         return f"{verb}{device_name}{target}"
+    english_match = re.match(r"^(turn\s+on|turn\s+off|open|close|reset)(.+)$", action, flags=re.IGNORECASE)
+    if english_match:
+        verb = english_match.group(1).strip()
+        target = english_match.group(2).strip()
+        if target.lower().startswith(("the ", "a ", "an ")):
+            return f"{verb} {target} in {device_name}"
+        return f"{verb} {target} in {device_name}"
     return f"{device_name}{action}"
 
 
 def parse_temperature_rule(query: str) -> dict[str, Any] | None:
-    match = _TEMPERATURE_RULE_PATTERN.search(str(query or "").strip())
+    query_text = str(query or "").strip()
+    match = _TEMPERATURE_RULE_PATTERN.search(query_text)
+    language = "zh-CN"
+    if not match:
+        match = _TEMPERATURE_RULE_PATTERN_EN.search(query_text)
+        language = "en-US"
     if not match:
         return None
 
-    device_name = match.group("device").strip().strip("，,。；; ")
-    operator_raw = match.group("operator")
+    device_name = _clean_rule_device_name(match.group("device"))
+    operator_raw = match.group("operator").strip().lower()
     operator_info = _OPERATOR_ALIASES.get(operator_raw)
     if not device_name or not operator_info:
         return None
@@ -95,21 +203,28 @@ def parse_temperature_rule(query: str) -> dict[str, Any] | None:
     return {
         "kind": "temperature_threshold",
         "device_name": device_name,
+        "standard_device_name": _resolve_standard_name(device_name),
         "operator": operator,
         "operator_text": operator_text,
         "threshold": threshold,
         "threshold_text": _normalize_threshold_text(threshold),
         "action_text": action_text,
         "execute_query": _build_execute_query(device_name, action_text),
+        "rule_language": language,
     }
 
 
 def parse_alarm_rule(query: str) -> dict[str, Any] | None:
-    match = _ALARM_RULE_PATTERN.search(str(query or "").strip())
+    query_text = str(query or "").strip()
+    match = _ALARM_RULE_PATTERN.search(query_text)
+    language = "zh-CN"
+    if not match:
+        match = _ALARM_RULE_PATTERN_EN.search(query_text)
+        language = "en-US"
     if not match:
         return None
 
-    device_name = match.group("device").strip().strip("，,。；; ")
+    device_name = _clean_rule_device_name(match.group("device"))
     if not device_name:
         return None
 
@@ -120,8 +235,10 @@ def parse_alarm_rule(query: str) -> dict[str, Any] | None:
     return {
         "kind": "alarm_trigger",
         "device_name": device_name,
+        "standard_device_name": _resolve_standard_name(device_name),
         "action_text": action_text,
         "execute_query": action_text,
+        "rule_language": language,
     }
 
 
@@ -143,7 +260,7 @@ def _build_confirmation_text(device_name: str, temperature: float, parsed_rule: 
     temperature_text = _normalize_threshold_text(temperature)
     threshold_text = parsed_rule.get("threshold_text") or _normalize_threshold_text(float(parsed_rule["threshold"]))
     operator_text = str(parsed_rule.get("operator_text") or "")
-    action_text = str(parsed_rule.get("action_text") or "").strip()
+    action_text = _translate_action_text_for_zh(str(parsed_rule.get("action_text") or "").strip())
     return (
         f"当前{device_name}{temperature_text}℃，"
         f"{operator_text}规则设定的{operator_text}{threshold_text}℃，"
@@ -295,6 +412,7 @@ def match_temperature_rules(
 ) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     normalized_device_name = _normalize_text(device_name)
+    standard_device_name = _normalize_text(_resolve_standard_name(device_name))
 
     for record in _load_all(log_file):
         # token is ignored for matching — any recorded temperature rule may apply
@@ -308,7 +426,10 @@ def match_temperature_rules(
 
         rule_device_name = str(parsed_rule.get("device_name") or "")
         normalized_rule_device_name = _normalize_text(rule_device_name)
-        if normalized_rule_device_name and normalized_rule_device_name not in normalized_device_name and normalized_device_name not in normalized_rule_device_name:
+        normalized_rule_standard_name = _normalize_text(parsed_rule.get("standard_device_name") or _resolve_standard_name(rule_device_name))
+        direct_match = not normalized_rule_device_name or normalized_rule_device_name in normalized_device_name or normalized_device_name in normalized_rule_device_name
+        standard_match = bool(standard_device_name and normalized_rule_standard_name and (standard_device_name == normalized_rule_standard_name))
+        if not direct_match and not standard_match:
             continue
 
         threshold = float(parsed_rule["threshold"])
@@ -342,6 +463,7 @@ def match_alarm_rules(
     """
     matches: list[dict[str, Any]] = []
     normalized_device_name = _normalize_text(device_name)
+    standard_device_name = _normalize_text(_resolve_standard_name(device_name))
 
     for record in _load_all(log_file):
         if record.get("source") != "alarm":
@@ -353,6 +475,7 @@ def match_alarm_rules(
         if isinstance(parsed_rule, dict):
             rule_device_name = str(parsed_rule.get("device_name") or "")
         normalized_rule_device_name = _normalize_text(rule_device_name)
+        normalized_rule_standard_name = _normalize_text(parsed_rule.get("standard_device_name") or _resolve_standard_name(rule_device_name)) if isinstance(parsed_rule, dict) else ""
 
         query_text = str(record.get("query") or "")
         normalized_query = _normalize_text(query_text)
@@ -367,6 +490,8 @@ def match_alarm_rules(
                 normalized_device_name in normalized_rule_device_name
                 or normalized_rule_device_name in normalized_device_name
             )
+        if not structured_match and standard_device_name and normalized_rule_standard_name:
+            structured_match = standard_device_name == normalized_rule_standard_name
 
         raw_query_match = normalized_device_name in normalized_query or normalized_query in normalized_device_name
 

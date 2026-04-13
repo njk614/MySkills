@@ -15,26 +15,68 @@ if str(CURRENT_DIR) not in sys.path:
 from skill_runtime import SkillRuntimeError, call_mcp_tool, execute_command, get_scene_context  # noqa: E402
 
 
-CONFIRMATION_WORDS = {"是", "确认", "好", "好的", "执行", "对", "可以", "行"}
-NEGATION_WORDS = {"否", "取消", "不", "不要", "算了"}
+CONFIRMATION_WORDS = {"是", "确认", "好", "好的", "执行", "对", "可以", "行", "yes", "confirm", "ok", "okay", "sure", "goahead", "dothat", "doit"}
+NEGATION_WORDS = {"否", "取消", "不", "不要", "算了", "no", "cancel", "stop", "dont", "nevermind", "nope"}
+
+MESSAGES = {
+    "zh-CN": {
+        "no_pending": "当前没有待确认操作",
+        "cancelled": "已取消操作",
+        "missing_query": "执行指令模式需要 --query 参数",
+        "missing_execute_query": "待确认操作缺少 execute_query",
+        "missing_agent_output": "确认执行需要上游 AI 提供 agent_output",
+    },
+    "en-US": {
+        "no_pending": "No pending confirmation found",
+        "cancelled": "Operation cancelled",
+        "missing_query": "Execution mode requires the --query argument",
+        "missing_execute_query": "The pending action does not contain execute_query",
+        "missing_agent_output": "Confirming the action requires agent_output from the upstream AI",
+    },
+}
 
 
 def _normalize_confirmation_text(query: str) -> str:
-    return re.sub(r"[\s，,。；;！？!?~～、]", "", query).strip()
+    return re.sub(r"[\s，,。；;！？!?~～、'\"`-]", "", query).strip().lower()
+
+
+def _detect_locale(text: str | None) -> str:
+    value = str(text or "")
+    if re.search(r"[A-Za-z]", value) and not re.search(r"[\u4e00-\u9fff]", value):
+        return "en-US"
+    return "zh-CN"
+
+
+def _message(locale: str, key: str) -> str:
+    return MESSAGES.get(locale, MESSAGES["zh-CN"]).get(key) or MESSAGES["zh-CN"][key]
+
+
+def _matches_intent(query: str, candidates: set[str]) -> bool:
+    normalized = _normalize_confirmation_text(query)
+    return normalized in candidates
+
+
+def _is_short_pending_reply_candidate(query: str) -> bool:
+    raw = str(query or "").strip()
+    if not raw:
+        return False
+    compact = _normalize_confirmation_text(raw)
+    if not compact:
+        return False
+    words = [item for item in re.split(r"\s+", raw) if item]
+    return len(compact) <= 12 and len(words) <= 2
 
 
 def _is_confirmation_query(query: str) -> bool:
-    normalized = _normalize_confirmation_text(query)
-    return normalized in CONFIRMATION_WORDS or normalized.startswith(tuple(word + " " for word in CONFIRMATION_WORDS))
+    return _matches_intent(query, CONFIRMATION_WORDS)
 
 
 def _is_negation_query(query: str) -> bool:
-    normalized = _normalize_confirmation_text(query)
-    return normalized in NEGATION_WORDS or normalized.startswith(tuple(word + " " for word in NEGATION_WORDS))
+    return _matches_intent(query, NEGATION_WORDS)
 
 
 def _get_operation_rule_recorder_script() -> Path:
-    return Path(__file__).resolve().parent.parent / "ruisi-twinioc-opeationrule-skill" / "scripts" / "invoke_recorder.py"
+    return Path(__file__).resolve().parent.parent.parent / "ruisi-twinioc-opeationrule-skill" / "scripts" / "invoke_recorder.py"
 
 
 def _run_recorder_command(arguments: list[str]) -> dict[str, object]:
@@ -82,6 +124,7 @@ def _extract_execute_query_from_pending(pending: dict[str, object]) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Invoke twinioc command executor skill")
     parser.add_argument("--token", required=True, help="孪易场景 token")
+    parser.add_argument("--base-url", default=None, help="孪易服务基础地址，默认 http://test.twinioc.net")
     parser.add_argument("--mcp-tool", help="直接调用 MCP 工具名称并返回结果，如 get_scene_info")
     parser.add_argument("--mcp-args", default="{}", help="MCP 工具参数 JSON 字符串")
     parser.add_argument("--query", help="用户输入的自然语言指令")
@@ -96,21 +139,22 @@ async def main() -> int:
     args = parse_args()
     try:
         original_query = args.query.strip() if args.query else ""
+        locale = _detect_locale(original_query)
         if args.mcp_tool:
             mcp_arguments = json.loads(args.mcp_args)
             if args.mcp_tool == "get_scene_context":
-                result = await get_scene_context(args.token)
+                result = await get_scene_context(args.token, base_url=args.base_url)
             else:
                 if "token" not in mcp_arguments:
                     mcp_arguments["token"] = args.token
-                result = await call_mcp_tool(args.token, args.mcp_tool, mcp_arguments)
+                result = await call_mcp_tool(args.token, args.mcp_tool, mcp_arguments, base_url=args.base_url)
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
 
         if not original_query:
             print(
                 json.dumps(
-                    {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": "执行指令模式需要 --query 参数"},
+                    {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": _message(locale, "missing_query")},
                     ensure_ascii=False,
                     indent=2,
                 )
@@ -118,45 +162,36 @@ async def main() -> int:
             return 1
 
         pending = None
-        if _is_confirmation_query(original_query) or _is_negation_query(original_query):
+        if _is_short_pending_reply_candidate(original_query):
             pending = _load_pending_confirmation(args.token)
-            if not pending:
-                print(
-                    json.dumps(
-                        {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": "当前没有待确认操作"},
-                        ensure_ascii=False,
-                        indent=2,
+            if pending and (_is_confirmation_query(original_query) or _is_negation_query(original_query)):
+                if _is_negation_query(original_query):
+                    _clear_pending_confirmation(args.token)
+                    print(json.dumps({"message": _message(locale, "cancelled")}, ensure_ascii=False, indent=2))
+                    return 0
+
+                execute_query = _extract_execute_query_from_pending(pending)
+                if not execute_query:
+                    print(
+                        json.dumps(
+                            {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": _message(locale, "missing_execute_query")},
+                            ensure_ascii=False,
+                            indent=2,
+                        )
                     )
-                )
-                return 1
+                    return 1
 
-            if _is_negation_query(original_query):
-                _clear_pending_confirmation(args.token)
-                print(json.dumps({"message": "已取消操作"}, ensure_ascii=False, indent=2))
-                return 0
+                args.query = execute_query
 
-            execute_query = _extract_execute_query_from_pending(pending)
-            if not execute_query:
-                print(
-                    json.dumps(
-                        {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": "待确认操作缺少 execute_query"},
-                        ensure_ascii=False,
-                        indent=2,
+                if not args.agent_output:
+                    print(
+                        json.dumps(
+                            {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": _message(locale, "missing_agent_output")},
+                            ensure_ascii=False,
+                            indent=2,
+                        )
                     )
-                )
-                return 1
-
-            args.query = execute_query
-
-            if not args.agent_output:
-                print(
-                    json.dumps(
-                        {"skill_name": "ruisi_twinioc_command_executor", "success": False, "error": "确认执行需要上游 AI 提供 agent_output"},
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                )
-                return 1
+                    return 1
 
         result = await execute_command(
             token=args.token,
@@ -164,6 +199,8 @@ async def main() -> int:
             agent_output=args.agent_output,
             execute_instruction=not args.no_execute,
             debug=args.debug,
+            locale=locale,
+            base_url=args.base_url,
         )
 
         if pending is not None and _is_confirmation_query(original_query):

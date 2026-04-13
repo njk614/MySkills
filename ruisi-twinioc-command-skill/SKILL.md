@@ -1,26 +1,27 @@
 ---
 name: ruisi-twinioc-command-skill
-description: This skill should be used when users need to convert Chinese natural-language TwinEasy scene interaction or video surveillance requests into executable command sequences and send them. Handles A/B/C/D scene interaction instructions AND E-series video surveillance instructions. All instruction generation, execution planning, and SendInstruction dispatching is handled here. Data queries are delegated to the ruisi-twinioc-dataquery-skill skill. The AI handles all reasoning; the Python runtime is a pure execution layer.
+description: This skill should be used when users need to convert Chinese or English TwinEasy scene interaction or video surveillance requests into executable command sequences and send them. Handles A/B/C/D scene interaction instructions AND E-series video surveillance instructions. All instruction generation, execution planning, and SendInstruction dispatching is handled here. Data queries are delegated to the ruisi-twinioc-dataquery-skill skill. The AI handles all reasoning; the Python runtime is a pure execution layer.
 ---
 
 # 睿思孪易产品指令技能包
 
 > **⚠️ 强制约束（最高优先级，任何情况下不得违反）**
 >
+> 0. 孪易服务基础地址默认使用 `http://test.twinioc.net`；如果调用方显式传入了 `base_url`，则必须使用该地址继续拼接固定路径。
 > 1. **禁止**用 curl、HTTP 请求或任何其他方式直接调用孪易接口。
 > 2. **所有数据查询**（场景信息、孪生体实例列表、传感器数据等）必须通过 `ruisi-twinioc-dataquery-skill` Skill 的 `query.py` 脚本完成：
 >    ```
->    python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp --token <token> --mcp-tool <工具名> [--mcp-args '{"参数":"值"}']
+>    python ../ruisi-twinioc-dataquery-skill/scripts/query.py --token <token> [--base-url <base-url>] --mcp-tool <工具名> [--mcp-args '{"参数":"值"}']
 >    ```
 > 3. **所有指令执行**（A/B/C/D 系列与 E 系列）必须通过本 Skill 自身的执行脚本完成：
 >    ```
->    python scripts/invoke_skill.py --token <token> --query "..." --agent-output "[指令串]"
+>    python scripts/invoke_skill.py --token <token> [--base-url <base-url>] --query "..." --agent-output "[指令串]"
 >    ```
 > 4. 脚本返回 JSON，从中读取数据后继续下一步，**不得在未运行脚本的情况下自行推测结果**。
 
 ## Overview
 
-本 Skill 负责将用户的中文自然语言请求转换为孪易平台可执行指令串，并通过 Python 执行层将指令下发到场景。
+本 Skill 负责将用户的中文或英文自然语言请求转换为孪易平台可执行指令串，并通过 Python 执行层将指令下发到场景。
 
 **架构说明（重要）：**
 
@@ -30,8 +31,22 @@ description: This skill should be used when users need to convert Chinese natura
 
 优先保证两件事：
 
-1. 面向用户的返回内容不带指令编码，只展示中文可读结果。
+1. 面向用户的返回内容不带指令编码，只展示与用户语言一致的可读结果。
 2. 面向执行接口的 `instruction_order` 和 `jsonData` 保留完整指令编码。
+
+**多语言兼容说明：**
+
+- 当前已支持中文、英文输入混合解析，不需要为英文场景单独维护一套指令技能。
+- 只有温度传感器查询链路会通过 `ruisi-twinioc-dataquery-skill/entity_aliases.json` 将中英文位置名映射到同一传感器或台账 ID。
+- 其他实体（如摄像头、灯、温控器、普通对象）仍按当前问题语言中的实际名称查找，不在执行层额外建立中英对应关系。
+- 执行层会根据用户语言返回中文或英文计划文本；同一条底层指令编码保持不变。
+
+**instruction_order 多语言规则：**
+
+- 第一类：无参数固定指令（如 `A03`、`A09`、`E08`）发送给孪易时统一归一为中文标准指令语义。
+- 第二类：固定枚举值指令（如 `A08` 开始/停止、`A16` 回放/实时、`E02` 单路/2×2/3×3）发送给孪易时统一归一为中文标准指令语义。
+- 第三类：名称类或自由文本参数指令（如 `B01`、`B07`、`A02`、`C01`、`E34`）参数部分使用查询层匹配返回的原始结果；匹配结果是中文就发中文，匹配结果是英文就发英文，不额外强制翻译。
+- 特殊项：`C02`（主题生成）与 `D01`（询问类内容）允许按当前用户语言保留中文或英文内容，不强制归一为中文。
 
 ## When To Use
 
@@ -67,7 +82,7 @@ description: This skill should be used when users need to convert Chinese natura
 - 如果 `ruisi-twinioc-dataquery-skill` 的查询结果带有 `rule_match`，说明已经命中 `ruisi-twinioc-opeationrule-skill` 中记录的规则。
 - 此时先把 `reply` 或规则返回中的确认话术展示给用户，不直接执行。
 - 命中规则时，`ruisi-twinioc-dataquery-skill` 会自动把待确认动作写入 `ruisi-twinioc-opeationrule-skill/.runtime/pending_confirmations.json`。
-- 当用户下一句只回复“是 / 确认 / 好 / 执行 / 否 / 取消”时，先调用 `python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>` 读取待确认动作。
+- 当用户下一句只回复“是 / 确认 / 好 / 执行 / 否 / 取消”，或英文肯定/否定词如“yes / confirm / ok / execute / no / cancel”时，先调用 `python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --get-pending --token <token>` 读取待确认动作。
 - 若用户是肯定答复，且返回的 `pending.execute_query` 存在，则使用该值作为新的执行请求进入本 Skill，例如 `关闭大会议室照明灯`、`打开大会议室温控器`；执行后再调用 `--clear-pending` 清理。
 - 若用户是否定答复，则调用 `python ../ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --clear-pending --token <token>`，然后回复 `已取消操作`。
 - 然后仍按现有规则生成 `B07/B08/B09/B10` 等物理设备指令，并遵守本 Skill 原有的确认与执行流程。
@@ -89,7 +104,7 @@ description: This skill should be used when users need to convert Chinese natura
 场景上下文由执行层在首次调用时自动加载。如需手动刷新场景信息：
 
 ```bash
-python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp --token <token> --mcp-tool get_scene_info
+python ../ruisi-twinioc-dataquery-skill/scripts/query.py --token <token> [--base-url <base-url>] --mcp-tool get_scene_info
 ```
 
 获得：
@@ -141,18 +156,21 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp --token <token> --m
 # 按类别查询孪生体实例列表
 python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
   --token <token> \
+  [--base-url <base-url>] \
   --mcp-tool get_twin_category_data \
   --mcp-args '{"twinCategoryName": "类别名称"}'
 
 # 按层级查该层所有孪生体类别
 python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
   --token <token> \
+  [--base-url <base-url>] \
   --mcp-tool get_twin_category \
   --mcp-args '{"levelName": "层级名称"}'
 
 # 查温度数据（按安装位置或孪生体实例名称）
 python ../ruisi-twinioc-dataquery-skill/scripts/query.py temperature \
   --token <token> \
+  [--base-url <base-url>] \
   --device-query "位置名称"
 ```
 
@@ -160,13 +178,14 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py temperature \
 
 如果上一步来自规则命中后的确认执行，则优先使用 `rule_match.parsed_rule.execute_query` 作为当前 `query`，不要丢失规则中已经补全好的设备名称。
 
-如果当前用户输入本身只是肯定词或否定词，先查 `ruisi-twinioc-opeationrule-skill` 的待确认动作；存在待确认动作时，优先按待确认动作处理，不要把“是/否”直接当作普通控制指令解析。
+如果当前用户输入本身只是肯定词或否定词，先查 `ruisi-twinioc-opeationrule-skill` 的待确认动作；存在待确认动作时，优先按待确认动作处理，不要把“是/否”或 “yes/no” 直接当作普通控制指令解析。
 
 **E 系列额外数据**：涉及摄像头名称（E34、E35）时，先查 `history_inter` 是否已有结果，没有则调用：
 
 ```bash
 python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
   --token <token> \
+  [--base-url <base-url>] \
   --mcp-tool get_bind_video_instance_names
 ```
 
@@ -190,9 +209,20 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 
 多指令按 `&` 连接；并列操作按 `&` 拼接在同一方括号内。
 
+- 执行层内部会把方括号中的 `&` 统一转换成 `$` 作为 `instruction_order` 分隔符再发送给孪易。
+- 如果在 Windows PowerShell 里手工调用脚本，`--agent-output` 不要在双引号中直接写 `$`，例如 `"[A02：层级切换：楼层20$B01：聚焦对象：环境传感器1]"`。PowerShell 会把 `$B01` 当作变量展开，导致传给脚本前就变成 `A02：层级切换：楼层20：聚焦对象：环境传感器1`。
+- 在 PowerShell 中请优先使用文档示例里的 `&` 连接多指令；如果必须传 `$`，请使用单引号或把 `$` 写成 `` `$ ``。
+
+生成 `instruction_order` 时必须遵守以下归一化规则：
+
+- 无参数固定指令只需要输出编码，执行层会在发送 HTTP 前自动展开为中文标准语义。
+- 固定枚举值指令在输出时应优先使用中文标准值，例如 `开始/停止`、`回放/实时`、`打开/关闭`。
+- 名称类参数保留查询层返回的原始名称，不要因为用户是英文就把已经匹配到的中文名称强行翻译成英文，也不要把英文名称强行翻译成中文。
+- `C02` 与 `D01` 的内容部分保持当前用户语言即可。
+
 ### 5. 生成用户可见计划文本
 
-将原始指令转换为中文计划文本时：
+将原始指令转换为用户当前语言的计划文本时：
 
 - 保留动作语义。
 - 去掉指令编码，如 `A03`、`B02`、`C01`。
@@ -207,9 +237,13 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 - `E34：筛选：大会议室摄像头2` `筛选：大会议室摄像头2`
 - `E12：事件：事件列表，选中` `事件：事件列表，选中`
 
-最终使用以下格式：
+中文最终使用以下格式：
 
 `根据最优策略，已经为您规划如下执行计划：\n1、...\n2、...`
+
+英文最终使用以下格式：
+
+`Based on the optimal strategy, I have prepared the following execution plan:\n1、...\n2、...`
 
 查询类 `D01`（场景查询）和 `E35`（摄像头查询）不加"规划如下执行计划"前缀，直接输出查询内容。
 
@@ -225,6 +259,7 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 ```
 
 - 同时，发送到孪易后端的 `jsonData` 字段仍保持格式：`instruction_order$&query$&plan_text`（其中 `instruction_order` 与 `plan_text` 由执行层或 AI 提供）。
+- 其中：`query` 保留用户原始问题；`plan_text` 根据用户语言返回中文或英文；`instruction_order` 按上文三类规则归一化后发送给孪易。
 
 - 如果需要兼容旧接收方（仍期待分段标记）的场景，请在接入层做适配；当前代码不再产生这些标记，文档仅作说明。
 
@@ -251,7 +286,7 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 
 - 注意：执行层返回给调用方的仍为固定 JSON（键 `message`），不再带任何分隔标记。确认交互请直接检查 `message` 字段中的文本并回复。
 
-用户回复“是”/“确认”/“好”/“好的”/“执行”等肯定词后，再调用执行脚本；用户回复“取消”/“否”/“不”/“算了”等否定词时，不调用脚本，回复“已取消操作”。
+用户回复“是”/“确认”/“好”/“好的”/“执行”/“yes”/“confirm”/“ok”/“execute”等肯定词后，再调用执行脚本；用户回复“取消”/“否”/“不”/“算了”/“no”/“cancel”等否定词时，不调用脚本，回复与当前语言一致的取消提示。
 
 确认后调用执行脚本示例（以确认打开大会议室温控器为例）：
 
@@ -301,16 +336,23 @@ python scripts/invoke_skill.py \\
 
 ### 用户可见文本
 
-调用脚本执行后，脚本的 stdout 直接就是 `plan_text` 纯文本，**原样作为最终回复输出，不要修改、不要包装**。
+调用脚本执行后，脚本返回 JSON，读取其中 `message` 字段作为最终回复输出，**原样转发，不要修改、不要包装**。
 
-示例输出：
+中文示例输出：
 
 ```
 根据最优策略，已经为您规划如下执行计划：
 1、层级切换：上一层
 ```
 
-询问类（D01）示例：
+英文示例输出：
+
+```
+Based on the optimal strategy, I have prepared the following execution plan:
+1、Turn off the lights: Large Meeting Room
+```
+
+询问类（D01 / E35）示例：
 
 ```
 为您查找到相关内容如下：大会议室摄像头2，后门入口摄像头；共2个
@@ -328,6 +370,8 @@ python scripts/invoke_skill.py \\
 
 - 保留完整编码。
 - 能直接用于 `SendInstruction`。
+- 无参数固定指令与固定枚举值指令发送给孪易时应为中文标准语义。
+- 名称类参数与 `C02` / `D01` 内容可保留匹配结果或用户当前语言，不强制统一翻译。
 
 ## 推理规则（AI 生成指令时遵循）
 
@@ -385,7 +429,7 @@ python scripts/invoke_skill.py \\
 13. 当用户输入问题是打开或关闭XXX温控器或者XXX空调时，对象名称直接从温控器孪生体中获取，输出"B09：打开温控器：（对象名称）"或"B10：关闭温控器：（对象名称）"。
 14. E34（视频筛选）和 E35（摄像头列表查询）依赖摄像头名称匹配。若通过 `ruisi-twinioc-dataquery-skill get_bind_video_instance_names` 返回的列表中找不到匹配项，输出 `[视频中没有找到匹配的信息]`，不抛出错误。
 15. 当用户说"查看XXX摄像头"、"打开XXX视频"时，识别为 E34，筛选参数 = 摄像头名称。
-16. 当用户说"XXX摄像头放大/拉近"或"XXX摄像头缩小/拉远"时（含具体摄像头名称），识别为 `E34：筛选：{摄像头名称}&E32：单路云台：拉近` 或 `E34：筛选：{摄像头名称}&E33：单路云台：拉远`；当用户只说"放大、缩小、拉近、拉远、左转、右转、抬头、低头"而不带摄像头名称时，直接输出对应单路云台指令（E28E33）。
+16. 当用户说"XXX摄像头放大/拉近"或"XXX摄像头缩小/拉远"时（含具体摄像头名称），识别为 `E34：筛选：{摄像头名称}&E32：单路云台：拉近` 或 `E34：筛选：{摄像头名称}&E33：单路云台：拉远`；当用户只说"放大、缩小、拉近、拉远、左转、右转、抬头、低头"而不带摄像头名称时，直接输出对应单路云台指令（E28-E33）。
 17. 当用户说"查看XXX摄像头告警/事件"时（含具体摄像头名称），识别为 `E34：筛选：{摄像头名称}&E12：事件：事件列表，选中`；当用户只说"看一下告警信息"等不含摄像头名称时，直接输出 `E12：事件：事件列表，选中`（E 系列中告警即事件）。
 18. 当用户询问"有哪些摄像头"、"摄像头列表"时，识别为 E35。
 19. 区分"上/下一页视频"（E05/E06）和"上/下一个视频"（E08/E09），不可混用。
@@ -393,7 +437,7 @@ python scripts/invoke_skill.py \\
 
 ### 特别注意事项
 
-1. 对用户输入进行模糊匹配，例如"园区概览""园区概况"视为同义。
+1. 对用户输入进行模糊匹配，例如"园区概览""园区概况"，以及英文别名与中文别名，均应优先映射到同一个后端标准实体。
 2. 当用户输入包含多个操作（如"切换到第八层并选中摄像头01"），分别输出多个指令（如：`A02：层级切换：楼层8&B02：选中对象：摄像头01`）。
 3. 当用户输入"切换主题到园区""切换到园区主题""切换园区"等类似表达时，也应识别为"A01：功能切换：分析&C01：主题切换：园区概况"。
 4. 对象上卷和对象下钻是不同的指令集，跟层级切换无关。

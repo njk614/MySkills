@@ -1,6 +1,6 @@
 ---
 name: ruisi-twinioc-dataquery-skill
-description: Use this skill for all read-only data query and information-retrieval operations on the TwinEasy platform. Handles temperature sensor readings, scene configuration, twin instance lists, environment sensor data, and camera instance names. Does NOT send any control instructions — pure query layer only. Use when users ask about current temperature, scene structure, what layers/charts/twins exist, environment data, or available camera names.
+description: Use this skill for all read-only data query and information-retrieval operations on the TwinEasy platform. Handles Chinese and English temperature queries, scene configuration, twin instance lists, environment sensor data, and camera instance names. Does NOT send any control instructions — pure query layer only. Use when users ask about current temperature, scene structure, what layers/charts/twins exist, environment data, or available camera names.
 ---
 
 # 睿思孪易产品数据获取技能包
@@ -13,7 +13,7 @@ description: Use this skill for all read-only data query and information-retriev
 
 ## Overview
 
-本 Skill 整合了孪易平台所有**只读数据查询**能力，包括：
+本 Skill 整合了孪易平台所有**只读数据查询**能力，包括中英文名称解析、温度查询、场景结构查询与摄像头名称查询：
 
 | 查询类型       | 说明                                                     |
 | -------------- | -------------------------------------------------------- |
@@ -33,9 +33,9 @@ description: Use this skill for all read-only data query and information-retriev
 
 在以下场景触发本 Skill：
 
-- 用户询问当前温度、某位置温度（"大厅东侧温度多少？"）
+- 用户询问当前温度、某位置温度（"大厅东侧温度多少？"、"What is the temperature in the Large Meeting Room?"）
 - 用户询问场景有哪些层级、图层、图表、主题
-- 用户需要知道某类别下有哪些孪生体实例（"这个场景里有哪些摄像头？"）
+- 用户需要知道某类别下有哪些孪生体实例（"这个场景里有哪些摄像头？"、"What camera names are available?"）
 - 用户需要查询环境传感器数据（"环境传感器3的湿度是多少？"）
 - 其他 Skill 在生成指令前需要获取名称列表（如 `ruisi-twinioc-command-skill` 需要实例名）
 
@@ -53,13 +53,13 @@ description: Use this skill for all read-only data query and information-retriev
 
 ### 1. 温度传感器查询
 
-**触发条件**：用户询问温度，如"大厅东侧现在多少度？""会议室温度高吗？"
+**触发条件**：用户询问温度，如"大厅东侧现在多少度？""会议室温度高吗？"，或英文输入如 "What is the temperature in the Large Meeting Room?"
 
 **温度规则联动**：
 
 - 当用户是纯温度查询（如"大会议室温度是多少？"）时，先运行温度查询。
 - 温度值返回后，必须继续调用 `ruisi-twinioc-opeationrule-skill/scripts/invoke_recorder.py --match-temperature`，按当前设备名称与温度值匹配已记录的温度规则。
-- 若命中规则，则把规则确认话术直接拼到 `reply` 中一起返回，例如：`大会议室当前温度25℃。当前大会议室25℃，大于规则设定的大于20℃，关闭照明灯，请确认是否执行？`
+- 若命中规则，则把规则确认话术直接拼到 `reply` 中一起返回；`reply` 会根据用户语言返回中文或英文结果。
 - 命中规则后，查询脚本还会自动把 `rule_match.parsed_rule.execute_query` 写入 `ruisi-twinioc-opeationrule-skill` 的待确认区，供用户下一句只回复“是/否”时继续处理。
 - 若未命中规则，则仅返回温度查询结果。
 
@@ -94,17 +94,20 @@ python scripts/query.py --token <token>
 }
 ```
 
-设备解析逻辑来自 `temperature-sensor-instruction/data_organized.json`：
+设备解析逻辑来自 `entity_aliases.json`：
 
-- `--device-query` 支持安装位置（如"大厅东侧"）或孪生体实例名称（如"环境传感器5"）。
+- 温度值通过 MCP 工具 `get_twin_realtime_time_series_data` 查询，脚本会在解析出目标设备后，优先使用 `entity_aliases.json` 中与 locale 对应的 `ledger_ids` 作为 `twinId` 入参；只有拿不到对应 ID 时才退回 `twinName`。
+- `entity_aliases.json` 是温度传感器查询链路的唯一设备台账，维护中文规范名、英文展示名、中英文别名与 locale 对应的 `ledger_ids`。
+- `--device-query` 支持中文规范名、英文展示名、传感器实例别名和中英文别名（如"大厅东侧"、"环境传感器5"、"Large Meeting Room"）。
+- 若中英文环境的传感器台账 ID 不同，优先使用 `entity_aliases.json` 中与 locale 对应的 `ledger_ids`。
+- 摄像头、灯、温控器等其他实体名称不使用该文件做人为中英对应；这类名称应直接使用用户当前语言下可查到的真实名称。
 - 无法匹配时 `reply` 为"设备不存在。"或"当前位置没有设备。"。
 - 多设备匹配时提示歧义。
 
 **可选参数：**
 
-- `--location-id`（默认 `dyo6vaow6203kx09`）
-- `--timeout`（默认 100 秒）
-- `--max-attempts`（默认 5 次）
+- `--base-url`（默认 `http://test.twinioc.net`；用于继续拼接 `/api/editor/mcp`）
+- `--target-ledger-id`（不传 `--device-query` 时使用默认设备台账 ID）
 
 ---
 
@@ -171,7 +174,7 @@ python scripts/query.py --token <token> --mcp-tool get_bind_video_instance_names
 ### 3. 解析结果
 
 - `temperature` 模式：读取 `reply` 字段，直接向用户展示。
-- `mcp` 模式：解析返回的 JSON，提取用户关心的字段，用中文自然语言整理后回复。
+- `mcp` 模式：解析返回的 JSON，提取用户关心的字段，用与用户语言一致的自然语言整理后回复。
 
 ### 4. 后续处理（可选）
 
@@ -185,18 +188,16 @@ python scripts/query.py --token <token> --mcp-tool get_bind_video_instance_names
 ## Output Rules
 
 1. 温度回复直接使用 `reply` 字段内容；如命中规则，`reply` 已包含确认话术。
-2. MCP 查询结果以中文可读方式整理，不直接将原始 JSON dump 给用户。
+2. MCP 查询结果以用户当前语言的可读方式整理，不直接将原始 JSON dump 给用户。
 3. 查询失败时如实告知用户原因，并提示可能的解决方向（如"设备不存在，可用名称包括……"）。
 4. 不输出任何控制指令编码（如 `A03`、`B01`），本 Skill 只负责展示数据。
 
 ## Configuration Defaults
 
-| 参数                     | 默认值                                               |
-| ------------------------ | ---------------------------------------------------- |
-| token                    | `gj6mxa`                                             |
-| base-url                 | `http://test.twinioc.net/api/editor/v1`              |
-| location-id              | `dyo6vaow6203kx09`                                   |
-| MCP base-url             | `http://test.twinioc.net/api/editor/mcp`             |
-| temperature level-id     | `gez4ermd715t31le`                                   |
-| default target ledger-id | `R3nazZz8Pyb6o7uc`                                   |
-| device catalog           | `temperature-sensor-instruction/data_organized.json` |
+| 参数                       | 默认值                      |
+| -------------------------- | --------------------------- |
+| token                      | `gj6mxa`                    |
+| service base-url           | `http://test.twinioc.net`   |
+| MCP base-url               | `{base-url}/api/editor/mcp` |
+| default target ledger-id   | `R3nazZz8Pyb6o7uc`          |
+| temperature device catalog | `entity_aliases.json`       |

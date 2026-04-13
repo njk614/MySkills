@@ -1,16 +1,28 @@
 ---
 name: ruisi-twinioc-opeationrule-skill
-description: Use this skill to record user queries that ask what operation to perform in response to a temperature reading or an alarm event, or that set up a scheduled/recurring task rule. Only record these three scenarios. Also trigger when the user asks to view, search, or list all recorded rules or operation history.
+description: Use this skill to record user queries that ask what operation to perform in response to a temperature reading or an alarm event, or that set up a scheduled/recurring task rule. Supports both Chinese and English rule text for temperature and alarm scenarios. Only record these three scenarios. Also trigger when the user asks to view, search, or list all recorded rules or operation history.
 ---
 
 # 睿思孪易产品操作规则记录技能包
 
 本 Skill 负责记录用户**针对温度数据或告警事件询问应执行何种操作**，或**设定定时任务规则**时的提问及 AI 返回的执行计划，并提供历史查询功能。
 
+## 基础地址说明
+
+- 本 Skill 不直接调用 TwinEasy 的 `/api/editor/*` HTTP 接口，因此不消费 `base_url`。
+- 它只读写本地规则记录，并被 `ruisi-twinioc-dataquery-skill`、`ruisi-twinioc-command-skill` 或 `ruisi-twinioc-alarm-hook` 以本地脚本方式调用。
+- 如果上游目录传入了 `base_url`，无需向本 Skill 继续透传。
+
 对于温度规则，本 Skill 现在还承担两项运行时能力：
 
 - 写入时自动把自然语言规则解析为结构化条件，例如“设备 + 比较符 + 阈值 + 动作”。
 - 在温度查询完成后，按“当前设备名 + 当前温度值”匹配已记录规则，并返回确认话术。
+
+对于温度规则和告警规则，本 Skill 目前已支持以下多语言能力：
+
+- 支持中文、英文规则文本解析，例如“当大会议室温度大于20度时关闭照明灯”和 “When the Large Meeting Room temperature is above 20 degrees then turn off the lights”。
+- 温度规则匹配可借助传感器位置别名做中英文归一，因为温度查询最终按传感器台账 ID 命中。
+- 除温度传感器位置外，其他实体仍按当前语言中的实际名称参与匹配，不额外建立通用中英对应关系。
 
 ## When To Use
 
@@ -18,13 +30,17 @@ description: Use this skill to record user queries that ask what operation to pe
 
 1. 用户的问题是**以温度为条件、指定要执行什么操作**的，且 AI 成功返回执行计划 → `--source temperature`
    - ✅ 记录："当大会议室温度大于20度时，打开大会议室温控器"
-   - ✅ 记录："温度太高了，帮我把温控器打开"
-   - ❌ 不记录："大会议室当前的温度是多少？"（纯查询，无操作指令）
+
+- ✅ 记录："When the Large Meeting Room temperature is above 20 degrees then turn on the air conditioner"
+- ✅ 记录："温度太高了，帮我把温控器打开"
+- ❌ 不记录："大会议室当前的温度是多少？"（纯查询，无操作指令）
 
 2. 用户的问题是**以告警事件为条件、指定要执行什么操作**的，且 AI 成功返回执行计划 → `--source alarm`
    - ✅ 记录："告警了，帮我关闭大会议室的灯"
-   - ✅ 记录："出现告警后执行场景复位"
-   - ❌ 不记录："当前有哪些告警？"（纯查询，无操作指令）
+
+- ✅ 记录："When the Large Meeting Room camera alarm occurs then turn on the lights"
+- ✅ 记录："出现告警后执行场景复位"
+- ❌ 不记录："当前有哪些告警？"（纯查询，无操作指令）
 
 3. 用户要求**设定定时/周期性任务规则**的，且 AI 成功返回执行计划 → `--source schedule`
    - ✅ 记录："帮我设置一个定时任务，每隔1小时查一下大会议室温度"
@@ -113,16 +129,17 @@ python scripts/invoke_recorder.py --query-log --source schedule --last 20
 | `token`  | 场景 token          | `kqq1po`                             |
 | `query`  | 用户原始输入文字    | `当大会议室温度大于20度时打开温控器` |
 
-温度规则记录若可解析，还会额外包含：
+温度规则或告警规则记录若可解析，还会额外包含：
 
-| 字段            | 说明                                          | 示例                 |
-| --------------- | --------------------------------------------- | -------------------- |
-| `parsed_rule`   | 结构化温度规则，仅温度规则有                  | 见下方示例           |
-| `device_name`   | 规则关联的设备/区域名称                       | `大会议室`           |
-| `operator`      | 比较运算符                                    | `gt` / `lte`         |
-| `threshold`     | 阈值                                          | `20.0`               |
-| `action_text`   | 匹配后建议执行的动作文本                      | `关闭照明灯`         |
-| `execute_query` | 用户确认后可直接交给 command skill 的执行语句 | `关闭大会议室照明灯` |
+| 字段                   | 说明                                          | 示例                 |
+| ---------------------- | --------------------------------------------- | -------------------- |
+| `parsed_rule`          | 结构化温度规则，仅温度规则有                  | 见下方示例           |
+| `device_name`          | 规则中原始设备/区域名称                       | `大会议室`           |
+| `standard_device_name` | 归一后的后端标准实体名称                      | `Large Meeting Room` |
+| `operator`             | 比较运算符                                    | `gt` / `lte`         |
+| `threshold`            | 阈值                                          | `20.0`               |
+| `action_text`          | 匹配后建议执行的动作文本                      | `关闭照明灯`         |
+| `execute_query`        | 用户确认后可直接交给 command skill 的执行语句 | `关闭大会议室照明灯` |
 
 `parsed_rule` 示例：
 
@@ -130,6 +147,7 @@ python scripts/invoke_recorder.py --query-log --source schedule --last 20
 {
   "kind": "temperature_threshold",
   "device_name": "大会议室",
+  "standard_device_name": "Large Meeting Room",
   "operator": "gt",
   "operator_text": "大于",
   "threshold": 20.0,
@@ -192,6 +210,7 @@ python scripts/invoke_recorder.py --match-temperature \
       "query": "当大会议室温度大于20度时关闭照明灯",
       "parsed_rule": {
         "device_name": "大会议室",
+        "standard_device_name": "Large Meeting Room",
         "operator": "gt",
         "operator_text": "大于",
         "threshold": 20.0,

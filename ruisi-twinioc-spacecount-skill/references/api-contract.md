@@ -4,11 +4,13 @@
 
 ## 0. 通用调用约定
 
-- 统一接口前缀：`http://test.twinioc.net/api/editor/v1`
+- 默认基础地址：`http://test.twinioc.net`
+- 未显式传入基础地址时，默认使用 `http://test.twinioc.net`；如传入 `base_url`，则使用该地址继续拼接固定路径。
+- 统一接口前缀：`{base-url}/api/editor/v1`
 - `token` 由用户输入传入，调用时必须透传给后端
 - 当前文档只约定接口语义、输入输出和调用约束，真实路径待后端接口文档补充后再落地
 - 如果后端采用统一请求体，则 `token` 应作为请求体字段传递；如果后端采用查询参数或 Header，则以真实接口文档为准
-- 技能实际调用层统一通过 `scripts/query.py mcp --token <token> --mcp-tool <工具名> [--mcp-args '{"参数":"值"}']` 转发到 MCP 网关
+- 技能实际调用层统一通过 `scripts/query.py --token <token> [--base-url <base-url>] --mcp-tool <工具名> [--mcp-args '{"参数":"值"}']` 转发到 MCP 网关
 
 ## 0.1 已提供的真实工具
 
@@ -30,6 +32,9 @@
 - `reschedule_space_reservation` 和 `cancel_space_reservation` 里的 `createdTime` 必须取自原预约返回结果中的 `Reservation.CreatedTime`
 - `createdTime` 不是预约开始时间，也不是结束时间
 - 调用时建议先按需查询 `get_reservable_spaces`、`check_space_availability` 或 `get_space_reservation_status`，再执行 `create_space_reservation`、`reschedule_space_reservation`、`cancel_space_reservation`
+- 预约类 `spaceType` 只允许 `会议室` 和 `灵活工位`
+- 所有接口要求参数，除 `token` 外都补默认值再透传；对 `spaceName`、`spaceId`、`createdTime` 这类未识别字段默认补空字符串
+- 当只传 `spaceName` 而未传 `spaceType` 时，优先根据名称里的“会议室”“工位”等字样推断；推断不出时默认补 `会议室`
 
 ### 0.1.2 空间利用指数查询工具
 
@@ -125,6 +130,7 @@
   - levelName
   - regionName
   - token
+- 默认补齐：`spaceType = 会议室`、`startTime = 当前时刻`、`endTime = 当前小时末`、`levelName = 楼层20`、`regionName = ""`
 - 预期输出：
   - `Message`
   - `QueryMode`
@@ -142,6 +148,7 @@
   - token
   - spaceId
   - spaceName
+- 默认补齐：`spaceType = 会议室`、`startTime = 当前时刻`、`endTime = 当前小时末`、`spaceId = ""`、`spaceName = ""`
 - 预期输出：
   - `Succeeded`
   - `Message`
@@ -158,6 +165,7 @@
   - newStartTime
   - newEndTime
   - token
+- 默认补齐：`spaceId = ""`、`createdTime = ""`、`newStartTime = 当前时刻`、`newEndTime = 当前小时末`
 - 预期输出：
   - `Succeeded`
   - `Message`
@@ -172,6 +180,7 @@
   - spaceId
   - createdTime
   - token
+- 默认补齐：`spaceId = ""`、`createdTime = ""`
 - 预期输出：
   - `Succeeded`
   - `Message`
@@ -197,6 +206,8 @@
 - `granularity` 可输入英文或中文语义，技能侧统一映射为 `Hour` / `Day` / `Week` / `Month`
 
 默认参数规则：未明确时直接使用以下默认值。
+
+- 代码侧默认常量统一维护在 `scripts/defaults.py`；调整默认值时，先修改该文件，再同步更新本文档。
 
 - 当用户问题未明确涉及入参时，`levelName` 默认使用 `楼层20`
 - `granularity` 默认使用 `Hour`

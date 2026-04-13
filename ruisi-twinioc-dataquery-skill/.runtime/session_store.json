@@ -1,11 +1,24 @@
 {
   "default": {
     "session_id": "default",
-    "token_judge": "l9pz2s",
+    "token_judge": "gj6mxa",
     "scene_info": "",
-    "history_inter": [],
-    "mcp_session_id": "",
-    "mcp_initialized": false,
-    "updated_at": 1773914228.382072
+    "history_inter": [
+      {
+        "tool_call_name": "get_twin_realtime_time_series_data",
+        "tool_response": {
+          "Message": "token无效或已过期，请重新连接SignalR获取新的token"
+        }
+      },
+      {
+        "tool_call_name": "get_twin_realtime_time_series_data",
+        "tool_response": {
+          "Message": "token无效或已过期，请重新连接SignalR获取新的token"
+        }
+      }
+    ],
+    "mcp_session_id": "OSDk0dI8U8JLcH2ocE37Dg",
+    "mcp_initialized": true,
+    "updated_at": 1775630216.221104
   }
 }

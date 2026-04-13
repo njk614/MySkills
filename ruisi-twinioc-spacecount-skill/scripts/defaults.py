@@ -1,0 +1,10 @@
+from __future__ import annotations
+
+DEFAULT_BASE_URL = "http://test.twinioc.net"
+DEFAULT_LEVEL_NAME = "楼层20"
+DEFAULT_GRANULARITY = "Hour"
+DEFAULT_REGION_NAME = ""
+DEFAULT_RESERVATION_SPACE_TYPE = "会议室"
+DEFAULT_SPACE_ID = ""
+DEFAULT_SPACE_NAME = ""
+DEFAULT_CREATED_TIME = ""

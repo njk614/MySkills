@@ -1,0 +1,112 @@
+[
+  {
+    "canonical_name_zh": "主场东南侧",
+    "system_name": "Main Hall Southeast Side",
+    "display_name_en": "Main Hall Southeast Side",
+    "aliases_en": ["main hall southeast side", "southeast side of the main hall"],
+    "aliases_zh": ["主场东南侧", "环境传感器4"],
+    "ledger_ids": {
+      "zh-CN": ["3Jv6OxwtZ784iLvR"],
+      "en-US": ["3Jv6OxwtZ784iLvR"]
+    }
+  },
+  {
+    "canonical_name_zh": "主场东侧",
+    "system_name": "Main Hall East Side",
+    "display_name_en": "Main Hall East Side",
+    "aliases_en": ["main hall east side", "east side of the main hall"],
+    "aliases_zh": ["主场东侧", "环境传感器5"],
+    "ledger_ids": {
+      "zh-CN": ["NuYf4SDmLJ5OWhqz"],
+      "en-US": ["NuYf4SDmLJ5OWhqz"]
+    }
+  },
+  {
+    "canonical_name_zh": "主场东北侧",
+    "system_name": "Main Hall Northeast Side",
+    "display_name_en": "Main Hall Northeast Side",
+    "aliases_en": ["main hall northeast side", "northeast side of the main hall"],
+    "aliases_zh": ["主场东北侧", "环境传感器6"],
+    "ledger_ids": {
+      "zh-CN": ["ITY3sAvxbMMarVW7"],
+      "en-US": ["ITY3sAvxbMMarVW7"]
+    }
+  },
+  {
+    "canonical_name_zh": "主场西北侧",
+    "system_name": "Main Hall Northwest Side",
+    "display_name_en": "Main Hall Northwest Side",
+    "aliases_en": ["main hall northwest side", "northwest side of the main hall"],
+    "aliases_zh": ["主场西北侧", "环境传感器1"],
+    "ledger_ids": {
+      "zh-CN": ["3bTaKlCNKOhIj8N2"],
+      "en-US": ["3bTaKlCNKOhIj8N2"]
+    }
+  },
+  {
+    "canonical_name_zh": "主场西侧",
+    "system_name": "Main Hall West Side",
+    "display_name_en": "Main Hall West Side",
+    "aliases_en": ["main hall west side", "west side of the main hall"],
+    "aliases_zh": ["主场西侧", "环境传感器2"],
+    "ledger_ids": {
+      "zh-CN": ["Kt63kVQOyJZLOcja"],
+      "en-US": ["Kt63kVQOyJZLOcja"]
+    }
+  },
+  {
+    "canonical_name_zh": "主场西南侧",
+    "system_name": "Main Hall Southwest Side",
+    "display_name_en": "Main Hall Southwest Side",
+    "aliases_en": ["main hall southwest side", "southwest side of the main hall"],
+    "aliases_zh": ["主场西南侧", "环境传感器3"],
+    "ledger_ids": {
+      "zh-CN": ["618OL7JzQKEW3CzC"],
+      "en-US": ["618OL7JzQKEW3CzC"]
+    }
+  },
+  {
+    "canonical_name_zh": "小会议室",
+    "system_name": "Small Meeting Room",
+    "display_name_en": "Small Meeting Room",
+    "aliases_en": ["small meeting room", "small conference room"],
+    "aliases_zh": ["小会议室", "环境传感器7"],
+    "ledger_ids": {
+      "zh-CN": ["HUj6jbR7Z2CwIwsx"],
+      "en-US": ["HUj6jbR7Z2CwIwsx"]
+    }
+  },
+  {
+    "canonical_name_zh": "大会议室",
+    "system_name": "Large Meeting Room",
+    "display_name_en": "Large Meeting Room",
+    "aliases_en": ["large meeting room", "meeting room", "conference room", "main conference room"],
+    "aliases_zh": ["大会议室", "环境传感器8"],
+    "ledger_ids": {
+      "zh-CN": ["R3nazZz8Pyb6o7uc"],
+      "en-US": ["R3nazZz8Pyb6o7uc"]
+    }
+  },
+  {
+    "canonical_name_zh": "机房1",
+    "system_name": "Machine Room",
+    "display_name_en": "Machine Room",
+    "aliases_en": ["machine room1", "server room1", "equipment room1"],
+    "aliases_zh": ["机房1", "环境传感器9"],
+    "ledger_ids": {
+      "zh-CN": ["ru4jK7b88xRdGPwi"],
+      "en-US": ["ru4jK7b88xRdGPwi"]
+    }
+  },
+  {
+    "canonical_name_zh": "机房",
+    "system_name": "Machine Room",
+    "display_name_en": "Machine Room",
+    "aliases_en": ["machine room", "server room", "equipment room"],
+    "aliases_zh": ["机房", "环境传感器10"],
+    "ledger_ids": {
+      "zh-CN": ["pY4uTcPb4HGXc0o5"],
+      "en-US": ["pY4uTcPb4HGXc0o5"]
+    }
+  }
+]

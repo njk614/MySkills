@@ -1,1 +1,26 @@
-{}
+{
+  "gj6mxa": {
+    "time": "2026-04-01T10:08:47Z",
+    "source": "temperature",
+    "confirmation_text": "当前大会议室26.7℃，大于规则设定的大于20℃，关闭大会议室照明灯开关，请确认是否执行？",
+    "execute_query": "关闭大会议室的大会议室照明灯开关",
+    "matched_rule": {
+      "time": "2026-03-23T08:41:46Z",
+      "source": "temperature",
+      "query": "当大会议室的温度大于20度时，关闭大会议室照明灯开关",
+      "parsed_rule": {
+        "kind": "temperature_threshold",
+        "device_name": "大会议室的",
+        "operator": "gt",
+        "operator_text": "大于",
+        "threshold": 20.0,
+        "threshold_text": "20",
+        "action_text": "关闭大会议室照明灯开关",
+        "execute_query": "关闭大会议室的大会议室照明灯开关"
+      },
+      "current_temperature": 26.7,
+      "confirmation_text": "当前大会议室26.7℃，大于规则设定的大于20℃，关闭大会议室照明灯开关，请确认是否执行？",
+      "confirmation_text_en": ""
+    }
+  }
+}
