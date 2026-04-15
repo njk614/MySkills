@@ -121,6 +121,17 @@ def _extract_execute_query_from_pending(pending: dict[str, object]) -> str:
     return str(parsed_rule.get("execute_query") or "").strip()
 
 
+def _resolve_pending_locale(pending: dict[str, object], fallback_locale: str) -> str:
+    pending_locale = str(pending.get("locale") or "").strip()
+    if pending_locale in {"zh-CN", "en-US"}:
+        return pending_locale
+
+    execute_query = _extract_execute_query_from_pending(pending)
+    if execute_query:
+        return _detect_locale(execute_query)
+    return fallback_locale
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Invoke twinioc command executor skill")
     parser.add_argument("--token", required=True, help="孪易场景 token")
@@ -165,6 +176,7 @@ async def main() -> int:
         if _is_short_pending_reply_candidate(original_query):
             pending = _load_pending_confirmation(args.token)
             if pending and (_is_confirmation_query(original_query) or _is_negation_query(original_query)):
+                locale = _resolve_pending_locale(pending, locale)
                 if _is_negation_query(original_query):
                     _clear_pending_confirmation(args.token)
                     print(json.dumps({"message": _message(locale, "cancelled")}, ensure_ascii=False, indent=2))

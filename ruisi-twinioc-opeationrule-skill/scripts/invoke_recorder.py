@@ -53,6 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--temperature-value", type=float, default=None, help="Current temperature value for temperature matching.")
     parser.add_argument("--confirmation-text", default=None, help="Confirmation text for pending action storage.")
     parser.add_argument("--execute-query", default=None, help="Resolved command query for confirmed execution.")
+    parser.add_argument("--locale", default=None, help="Locale to store with the pending confirmation.")
     parser.add_argument("--matched-rule-json", default=None, help="Matched rule payload JSON for pending action storage.")
 
     # query params
@@ -162,6 +163,7 @@ def main() -> int:
             source=args.source or "temperature",
             confirmation_text=args.confirmation_text or "",
             execute_query=args.execute_query,
+            locale=args.locale,
             matched_rule=matched_rule,
             pending_file=pending_file,
         )

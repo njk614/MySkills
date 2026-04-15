@@ -157,9 +157,10 @@ def _translate_action_text_for_zh(action_text: str) -> str:
 
 
 def _build_execute_query(device_name: str, action_text: str) -> str:
-    normalized_device_name = _normalize_text(device_name)
+    clean_device_name = _clean_rule_device_name(device_name)
+    normalized_device_name = _normalize_text(clean_device_name)
     normalized_action_text = _normalize_text(action_text)
-    if not device_name or (normalized_device_name and normalized_device_name in normalized_action_text):
+    if not clean_device_name or (normalized_device_name and normalized_device_name in normalized_action_text):
         return action_text
 
     action = action_text.strip()
@@ -169,15 +170,15 @@ def _build_execute_query(device_name: str, action_text: str) -> str:
         target = match.group(2).strip()
         if normalized_device_name and normalized_device_name in _normalize_text(target):
             return action_text
-        return f"{verb}{device_name}{target}"
+        return f"{verb}{clean_device_name}{target}"
     english_match = re.match(r"^(turn\s+on|turn\s+off|open|close|reset)(.+)$", action, flags=re.IGNORECASE)
     if english_match:
         verb = english_match.group(1).strip()
         target = english_match.group(2).strip()
         if target.lower().startswith(("the ", "a ", "an ")):
-            return f"{verb} {target} in {device_name}"
-        return f"{verb} {target} in {device_name}"
-    return f"{device_name}{action}"
+            return f"{verb} {target} in {clean_device_name}"
+        return f"{verb} {target} in {clean_device_name}"
+    return f"{clean_device_name}{action}"
 
 
 def parse_temperature_rule(query: str) -> dict[str, Any] | None:
@@ -583,6 +584,7 @@ def save_pending_confirmation(
     source: str,
     confirmation_text: str,
     execute_query: str,
+    locale: str | None = None,
     matched_rule: dict[str, Any] | None = None,
     pending_file: Path = DEFAULT_PENDING_FILE,
 ) -> dict[str, Any]:
@@ -598,6 +600,8 @@ def save_pending_confirmation(
         "confirmation_text": confirmation_text,
         "execute_query": execute_query,
     }
+    if locale:
+        pending_record["locale"] = locale
     if matched_rule is not None:
         pending_record["matched_rule"] = matched_rule
 

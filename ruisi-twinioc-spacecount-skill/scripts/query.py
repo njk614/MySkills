@@ -46,6 +46,12 @@ PARAM_KEY_ALIASES: dict[str, str] = {
     "空间名称": "spaceName",
     "spaceid": "spaceId",
     "空间id": "spaceId",
+    "booker": "booker",
+    "预定人": "booker",
+    "bookingperson": "booker",
+    "usagepurpose": "usagePurpose",
+    "usage purpose": "usagePurpose",
+    "预定用途": "usagePurpose",
     "bookingstarttime": "startTime",
     "预定开始时间": "startTime",
     "bookingendtime": "endTime",
@@ -80,6 +86,13 @@ RESERVATION_QUERY_TOOLS: frozenset[str] = frozenset(
 )
 
 RESERVABLE_SPACE_TYPES: frozenset[str] = frozenset({"会议室", "灵活工位"})
+
+CREATE_RESERVATION_REQUIRED_FIELDS: tuple[str, str] = ("booker", "usagePurpose")
+
+CREATE_RESERVATION_FIELD_LABELS: dict[str, dict[str, str]] = {
+    "booker": {"zh-CN": "预定人", "en-US": "booker"},
+    "usagePurpose": {"zh-CN": "预定用途", "en-US": "usage purpose"},
+}
 
 GRANULARITY_ALIASES: dict[str, str] = {
     "hour": "Hour",
@@ -267,6 +280,22 @@ def _localize_space_type(value: Any, locale: str) -> str:
     return localized.get(locale) or canonical
 
 
+def _format_required_fields_message(locale: str, field_names: list[str]) -> str:
+    labels = [CREATE_RESERVATION_FIELD_LABELS.get(field, {}).get(locale) or field for field in field_names]
+    if locale == "en-US":
+        if len(labels) == 1:
+            return f"Creating a reservation requires {labels[0]}."
+        if len(labels) == 2:
+            return f"Creating a reservation requires {labels[0]} and {labels[1]}."
+        return f"Creating a reservation requires {', '.join(labels)}."
+
+    if len(labels) == 1:
+        return f"创建预约需要补充{labels[0]}。"
+    if len(labels) == 2:
+        return f"创建预约需要补充{labels[0]}和{labels[1]}。"
+    return f"创建预约需要补充{'、'.join(labels)}。"
+
+
 def _infer_space_type_from_name(value: Any) -> str:
     raw = _string_value(value)
     if not raw:
@@ -446,6 +475,9 @@ def _validate_mcp_args(tool_name: str, mcp_args: dict[str, Any], locale: str) ->
         if space_type not in RESERVABLE_SPACE_TYPES:
             return "create_space_reservation 的 spaceType 只能是 会议室 或 灵活工位"
         mcp_args["spaceType"] = _localize_space_type(space_type, locale)
+        missing_required_fields = [field for field in CREATE_RESERVATION_REQUIRED_FIELDS if not _has_value(mcp_args, field)]
+        if missing_required_fields:
+            return _format_required_fields_message(locale, missing_required_fields)
         return None
 
     return None

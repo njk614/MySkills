@@ -284,6 +284,36 @@ python ../ruisi-twinioc-dataquery-skill/scripts/query.py mcp \
 即将执行：{操作描述，如"打开灯：1F走廊灯"}，请确认是否执行？（是/否）
 ```
 
+- 如果当前用户问题是中文，确认提示必须保持全中文，不要夹杂英文动作词。
+- 如果当前用户问题是英文，确认提示必须保持全英文，不要使用中文外壳包裹英文对象名。
+- 这里的“确认提示”属于用户可见最终回复的一部分，不允许先输出英文计划，再额外补一段中文解释或中文确认问句。
+- 英文用户进入确认分支时，整条最终回复都必须是英文；中文用户进入确认分支时，整条最终回复都必须是中文。
+- 英文确认提示格式固定为：
+
+```
+The following action will be executed: {action description, for example "Turn on the light switch in 1F corridor"}. Please confirm whether to proceed. (yes/no)
+```
+
+- 对灯光和温控这类物理设备控制，英文动作描述优先写成自然英语短语，如 `Turn on the light switch in Large Meeting Room`、`Turn off the air conditioner in Small Meeting Room`，不要输出 `打开灯：Large Meeting RoomLight Switch`、`关闭温控器：Small Meeting RoomThermostat` 这类中英拼接文本。
+- 物理设备确认分支建议直接按以下模板回复，不要自由发挥解释性前后缀：
+
+中文模板：
+
+```
+即将执行：{操作描述}，请确认是否执行？（是/否）
+```
+
+英文模板：
+
+```
+The following action will be executed: {action description}. Please confirm whether to proceed. (yes/no)
+```
+
+- 禁止以下错误形式：
+  - 先输出英文计划，再补一段中文“但根据规则，需要您确认……”
+  - 英文问题下输出“是否确认打开大会议室照明灯开关？（是/否）”
+  - 中文问题下输出 “Please confirm whether to proceed. (yes/no)”
+
 - 注意：执行层返回给调用方的仍为固定 JSON（键 `message`），不再带任何分隔标记。确认交互请直接检查 `message` 字段中的文本并回复。
 
 用户回复“是”/“确认”/“好”/“好的”/“执行”/“yes”/“confirm”/“ok”/“execute”等肯定词后，再调用执行脚本；用户回复“取消”/“否”/“不”/“算了”/“no”/“cancel”等否定词时，不调用脚本，回复与当前语言一致的取消提示。

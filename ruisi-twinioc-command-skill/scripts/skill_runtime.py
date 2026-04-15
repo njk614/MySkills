@@ -159,10 +159,14 @@ EN_TEXT_REPLACEMENTS: list[tuple[str, str]] = [
     ("关闭温控器", "Turn off the air conditioner"),
     ("打开照明灯", "Turn on the lights"),
     ("关闭照明灯", "Turn off the lights"),
+    ("照明灯开关", "light switch"),
+    ("灯开关", "light switch"),
+    ("照明灯", "lights"),
     ("聚焦对象", "Focus on"),
     ("对象下钻", "Drill down object"),
     ("对象上卷", "Drill up object"),
     ("取消选中", "Clear selection"),
+    ("选中", "select"),
     ("选中对象", "Select object"),
     ("对象选中", "Select object"),
     ("图层管理", "Layer management"),
@@ -275,6 +279,35 @@ EN_TEXT_REPLACEMENTS: list[tuple[str, str]] = [
     ("霾", "haze"),
     ("园区概况", "campus overview"),
 ]
+
+EN_TEXT_BOUNDARY_PHRASES: tuple[str, ...] = (
+    "light switch",
+    "the lights",
+    "air conditioner",
+    "turn on",
+    "turn off",
+    "focus on",
+    "drill down object",
+    "drill up object",
+    "clear selection",
+    "select object",
+    "layer management",
+    "chart management",
+    "environment control",
+    "presentation report",
+    "alarm info",
+    "scene rotation",
+    "function switch",
+    "show layer",
+    "hide layer",
+    "show chart",
+    "close chart",
+    "video",
+    "event",
+    "playback",
+    "timeline",
+    "PTZ",
+)
 
 EN_TO_ZH_FIXED_REPLACEMENTS: list[tuple[str, str]] = sorted(
     [
@@ -418,6 +451,23 @@ EN_DISPLAY_LABELS: dict[str, str] = {
     "A02": "Level",
     "B01": "Focus on",
     "B02": "Select object",
+}
+
+DEVICE_CONTROL_EN_ACTIONS: dict[str, str] = {
+    "B07": "Turn on",
+    "B08": "Turn off",
+    "B09": "Turn on",
+    "B10": "Turn off",
+}
+
+VIDEO_COMMAND_EN_ACTIONS: dict[str, str] = {
+    "E02": "Set display mode to",
+    "E03": "video carousel",
+    "E04": "Sort videos",
+    "E12": "event list",
+    "E13": "event carousel",
+    "E15": "Sort events",
+    "E21": "Switch time mode to",
 }
 
 
@@ -746,6 +796,8 @@ def _translate_text(text: str, locale: str) -> str:
     for source, target in EN_TEXT_REPLACEMENTS:
         translated = translated.replace(source, target)
     translated = translated.replace("：", ": ").replace("，", ", ").replace("、", ", ")
+    for phrase in EN_TEXT_BOUNDARY_PHRASES:
+        translated = re.sub(rf"(?<=[A-Za-z])(?={re.escape(phrase)})", " ", translated)
     translated = re.sub(r"\s{2,}", " ", translated)
     return translated.strip()
 
@@ -799,7 +851,104 @@ def _extract_command_value(command: str) -> str:
     return str(command or "").strip()
 
 
+def _strip_suffix_case_insensitive(text: str, suffixes: tuple[str, ...]) -> str:
+    normalized = str(text or "").strip()
+    for suffix in suffixes:
+        pattern = rf"\s*{re.escape(suffix)}\s*$"
+        updated = re.sub(pattern, "", normalized, flags=re.IGNORECASE).strip()
+        if updated != normalized:
+            return updated
+    return normalized
+
+
+def _extract_structured_segments(command: str) -> tuple[str, str, str]:
+    body = _extract_info(command)
+    colon_parts = [part.strip() for part in re.split(r"[：:]", body, maxsplit=1)]
+    section = colon_parts[0] if colon_parts else ""
+    detail = colon_parts[1] if len(colon_parts) > 1 else ""
+    if not detail:
+        return "", section, ""
+
+    comma_parts = [part.strip() for part in re.split(r"[，,]", detail, maxsplit=1)]
+    subject = comma_parts[0] if comma_parts else ""
+    value = comma_parts[1] if len(comma_parts) > 1 else ""
+    return section, subject, value
+
+
+def _render_video_command_en_display(command: str) -> str | None:
+    command_prefix = _get_command_prefix(command)
+    if command_prefix not in VIDEO_COMMAND_EN_ACTIONS:
+        return None
+
+    _section, subject, value = _extract_structured_segments(command)
+    translated_subject = _translate_text(subject, "en-US")
+    translated_value = _translate_text(value, "en-US")
+
+    if command_prefix == "E02":
+        return f"Set display mode to {translated_value}" if translated_value else "Set display mode"
+
+    if command_prefix == "E03":
+        action = translated_value.capitalize() if translated_value else "Control"
+        return f"{action} video carousel"
+
+    if command_prefix == "E04":
+        return f"Sort videos {translated_value}" if translated_value else "Sort videos"
+
+    if command_prefix == "E12":
+        normalized_value = translated_value.lower()
+        if normalized_value == "select":
+            return "Select event list"
+        if normalized_value == "cancel":
+            return "Clear event list selection"
+        return f"Event list: {translated_value}" if translated_value else "Event list"
+
+    if command_prefix == "E13":
+        action = translated_value.capitalize() if translated_value else "Control"
+        return f"{action} event carousel"
+
+    if command_prefix == "E15":
+        return f"Sort events {translated_value}" if translated_value else "Sort events"
+
+    if command_prefix == "E21":
+        return f"Switch time mode to {translated_value}" if translated_value else "Switch time mode"
+
+    if translated_value:
+        return f"{translated_subject}: {translated_value}" if translated_subject else translated_value
+    return translated_subject or None
+
+
+def _render_device_control_en_display(command: str) -> str | None:
+    command_prefix = _get_command_prefix(command)
+    action = DEVICE_CONTROL_EN_ACTIONS.get(command_prefix)
+    if not action:
+        return None
+
+    value = _translate_text(_extract_command_value(command), "en-US")
+    value = re.sub(r"\s{2,}", " ", value).strip(" :,.")
+    if not value:
+        return action
+
+    if command_prefix in {"B07", "B08"}:
+        location = _strip_suffix_case_insensitive(value, ("light switch", "lights"))
+        if location and location != value:
+            return f"{action} the light switch in {location}"
+        return f"{action} {value}" if re.search(r"\blight switch\b|\blights\b", value, re.IGNORECASE) else f"{action} the lights in {value}"
+
+    location = _strip_suffix_case_insensitive(value, ("air conditioner", "thermostat", "temperature controller", "hvac"))
+    if location and location != value:
+        return f"{action} the air conditioner in {location}"
+    return f"{action} {value}" if re.search(r"\bair conditioner\b|\bthermostat\b|\bhvac\b", value, re.IGNORECASE) else f"{action} the air conditioner in {value}"
+
+
 def _render_structured_en_display(command: str) -> str | None:
+    device_control_display = _render_device_control_en_display(command)
+    if device_control_display is not None:
+        return device_control_display
+
+    video_command_display = _render_video_command_en_display(command)
+    if video_command_display is not None:
+        return video_command_display
+
     command_prefix = _get_command_prefix(command)
     label = EN_DISPLAY_LABELS.get(command_prefix)
     if not label:

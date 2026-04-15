@@ -35,6 +35,7 @@
 - 预约类 `spaceType` 只允许 `会议室` 和 `灵活工位`
 - 所有接口要求参数，除 `token` 外都补默认值再透传；对 `spaceName`、`spaceId`、`createdTime` 这类未识别字段默认补空字符串
 - 当只传 `spaceName` 而未传 `spaceType` 时，优先根据名称里的“会议室”“工位”等字样推断；推断不出时默认补 `会议室`
+- `create_space_reservation` 还必须显式提供 `booker`（预定人）和 `usagePurpose`（预定用途）；这两个字段没有默认值，缺失时应由上层先提示用户补充
 
 ### 0.1.2 空间利用指数查询工具
 
@@ -148,7 +149,10 @@
   - token
   - spaceId
   - spaceName
+  - booker
+  - usagePurpose
 - 默认补齐：`spaceType = 会议室`、`startTime = 当前时刻`、`endTime = 当前小时末`、`spaceId = ""`、`spaceName = ""`
+- `booker` 与 `usagePurpose` 不设置默认值，必须由用户显式提供
 - 预期输出：
   - `Succeeded`
   - `Message`

@@ -577,7 +577,7 @@ def _find_matched_temperature_rule(token: str, device_name: str, temperature: fl
     return latest_match if isinstance(latest_match, dict) else None
 
 
-def _save_pending_rule_action(token: str, matched_rule: dict[str, Any]) -> None:
+def _save_pending_rule_action(token: str, matched_rule: dict[str, Any], locale: str) -> None:
     recorder_script = SKILLS_ROOT / "ruisi-twinioc-opeationrule-skill" / "scripts" / "invoke_recorder.py"
     if not recorder_script.exists():
         return
@@ -596,6 +596,8 @@ def _save_pending_rule_action(token: str, matched_rule: dict[str, Any]) -> None:
         "--save-pending",
         "--token",
         token,
+        "--locale",
+        locale,
         "--source",
         "temperature",
         "--confirmation-text",
@@ -732,7 +734,7 @@ def _run_temperature(args: argparse.Namespace) -> int:
         if confirmation_text:
             payload["reply"] = f"{reply}{_message(locale, 'rule_reply_joiner')}{confirmation_text}"
         payload["rule_match"] = matched_rule
-        _save_pending_rule_action(args.token, matched_rule)
+        _save_pending_rule_action(args.token, matched_rule, locale)
     else:
         _clear_pending_rule_action(args.token)
 
