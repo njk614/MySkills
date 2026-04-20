@@ -38,6 +38,7 @@ skill-name/
 - `references/` 中存放技能执行时需要按需读取的规则和集成资料。
 - `scripts/` 中存放可执行实现，用于真正复刻工作流能力，而不是只保留说明文档。
 - 当前 `luanyi_interactive_assistant` 已整理为“完整 Skill 包 + 可执行脚本实现”。
+- 多 Skill 之间的统一分流规则见 [docs/SKILL-ROUTING.md](docs/SKILL-ROUTING.md)。
 
 ## 如果需要打包
 
