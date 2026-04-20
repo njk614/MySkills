@@ -1,0 +1,7 @@
+interface:
+  display_name: 'Ruisi TwinIOC Data Query'
+  short_description: '处理孪易平台温度、场景、孪生体和摄像头名称等只读查询'
+  default_prompt: |
+    当用户询问温度、场景结构、图层图表、孪生体实例、环境传感器数据或摄像头名称列表时，使用 $ruisi-twinioc-dataquery-skill。
+    本 skill 只做只读查询，不直接发送控制指令。
+    如果温度查询命中了已记录规则，返回结果时保留确认话术，并按 skill 说明自动写入待确认动作。
