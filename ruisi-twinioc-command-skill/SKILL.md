@@ -417,7 +417,7 @@ Based on the optimal strategy, I have prepared the following execution plan:
    ```
    从返回结果中匹配最接近的一个；如果经过查找仍没有匹配成功，拼接固定语句"场景中没有找到匹配的信息，"以及通过查询接口查找到的相关数据，然后用一个 `[]` 括起来直接输出，且不拼接任何指令，**非常重要优先级最高**。
 5. 剩下的智能输出所需内容。
-6. 当用户输入"生成XXXX"、"统计XXX"、"创建XXX"、"分析XXX"、"统计一下XXX"等类似表达时，必须识别为"C02：主题生成：XXX"。
+6. 当用户输入"生成XXXX"、"统计XXX"、"创建XXX"、"分析XXX"、"统计一下XXX"等类似表达时，必须识别为"C02：主题生成：XXX"。英文场景下，凡输入中含有 `generate`、`statistics`、`statistical`、`create`、`analyze`、`analysis`、`report`、`overview of`（后跟描述性内容而非已知主题名）等关键词前缀时，同样必须识别为 C02 主题生成，而非 C01 主题切换。判断优先级：**C02（生成）> C01（切换）**；只有当用户输入中明确出现"切换/switch/change to"且对应名称与已知主题完全匹配时，才走 C01。
 7. 当用户输入询问类型的内容时（如"有哪些XXX"、"XXX有什么"），**必须按以下步骤完成，不得跳过**：
    1. 调用 `ruisi-twinioc-dataquery-skill` 获取实例列表，类别名称从 `scene_info.twinCategoryNames` 中匹配最接近的一个：
       ```bash
