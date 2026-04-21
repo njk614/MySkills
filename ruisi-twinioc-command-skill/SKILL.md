@@ -1,6 +1,6 @@
 ---
 name: ruisi-twinioc-command-skill
-description: This skill should be used when users need to convert Chinese or English TwinEasy scene interaction or video surveillance requests into executable command sequences and send them. Handles A/B/C/D scene interaction instructions AND E-series video surveillance instructions. All instruction generation, execution planning, and SendInstruction dispatching is handled here. Data queries are delegated to the ruisi-twinioc-dataquery-skill skill. The AI handles all reasoning; the Python runtime is a pure execution layer.
+description: This skill should be used for scene control and video operation requests that need executable commands, such as opening or closing devices, switching layers, focusing objects, handling alarms, controlling cameras, video playback, and query-then-execute requests. It should not be the default entry for pure environment metric queries or pure space reservation or space utilization index queries. All instruction generation, execution planning, and SendInstruction dispatching is handled here. Data queries are delegated to the ruisi-twinioc-dataquery-skill skill.
 ---
 
 # 睿思孪易产品指令技能包
@@ -72,10 +72,52 @@ description: This skill should be used when users need to convert Chinese or Eng
 
 不要在纯闲聊、无孪易场景控制需求、也无指令执行需求的场景触发本 Skill。
 
+### OpenClaw 路由边界
+
+OpenClaw 在路由到本 Skill 前，应优先确认用户是否真的要“执行动作”或“查询后立即执行动作”。
+
+优先触发本 Skill 的典型问法：
+
+- 打开大会议室温控器
+- 关闭主场灯光
+- 切换到主场摄像头
+- 聚焦大会议室
+- 处理当前告警
+- 查一下哪个会议室空着，然后切到那个会议室摄像头
+
+优先关键词：
+
+- `打开`
+- `关闭`
+- `切换`
+- `控制`
+- `执行`
+- `聚焦`
+- `选中`
+- `搜索`
+- `播放`
+- `暂停`
+- `回放`
+- `摄像头`
+- `视频`
+- `灯光`
+- `温控器`
+- `空调`
+- `告警处理`
+
+以下情况不要优先触发本 Skill：
+
+- 用户核心问题是温度、湿度、CO2、PM2.5、空气质量、环境趋势、温度传感器等环境统计查询
+- 用户核心问题是会议室预约、工位预约、空间利用指数、占用率、空置率、区域结果、整层结果等空间计量查询
+
+`D01` 查询能力不是所有查询问题的兜底入口。只有当查询目标是场景内容、孪生体对象、摄像头名称列表、视频面板内容，或者查询结果将立即用于后续执行动作时，才适合进入本 Skill。
+
 **与 `ruisi-twinioc-dataquery-skill` 的边界**：
 
 - 纯查询（无需执行指令） 使用 `ruisi-twinioc-dataquery-skill`。
 - 需要执行控制指令（含查询后执行） 使用本 Skill，查询部分委托给 `ruisi-twinioc-dataquery-skill`。
+- 纯环境指标查询优先使用 `ruisi-twinioc-envmetric-skill`，不要路由到本 Skill。
+- 纯空间预约或空间利用指数查询优先使用 `ruisi-twinioc-spacecount-skill`，不要路由到本 Skill。
 
 **规则联动（温度 / 告警）**：
 
