@@ -278,6 +278,8 @@ EN_TEXT_REPLACEMENTS: list[tuple[str, str]] = [
     ("雾", "fog"),
     ("霾", "haze"),
     ("园区概况", "campus overview"),
+    ("资产盘点", "Asset inventory"),
+    ("显隐路径", "Show/hide path"),
 ]
 
 EN_TEXT_BOUNDARY_PHRASES: tuple[str, ...] = (
@@ -390,11 +392,23 @@ def _build_entity_display_replacements(entries: list[dict[str, Any]]) -> list[tu
 DIRECT_INFO_PREFIXES: set[str] = {
     "A01", "A02", "A07", "A08", "A10", "A11", "A12", "A15", "A16", "A17", "A18",
     "A19", "A22", "A23", "A24", "A25", "A26", "A27", "A28", "A29", "A39",
-    "B01", "B02", "B06", "B07", "B08", "B09", "B10", "C01", "C02",
+    "B01", "B02", "B06", "B07", "B08", "B09", "B10", "B13", "B14", "C01", "C02",
     "E01", "E02", "E03", "E04", "E07",
     "E12", "E13", "E14", "E15", "E16",
     "E21", "E24", "E25", "E26", "E27",
     "E34",
+}
+
+# B11/B12 固定计划文本（显隐路径指令）
+FIXED_PLAN_TEXT: dict[str, dict[str, str]] = {
+    "B11": {
+        "zh-CN": "已查询到小会议室的位置。并为您提供了去小会议室的路径",
+        "en-US": "The location of the small meeting room has been found. A path to the small meeting room has been provided for you.",
+    },
+    "B12": {
+        "zh-CN": "已查询到打印机的位置。并为您提供了去打印机的路径",
+        "en-US": "The location of the printer has been found. A path to the printer has been provided for you.",
+    },
 }
 
 DEMO_PREFIXES: set[str] = {"A30"}
@@ -965,6 +979,8 @@ def _get_display_text(command: str, locale: str) -> str:
         if locale == "en-US":
             return EN_NO_ARG_COMMAND_TEXT.get(command_prefix, NO_ARG_COMMAND_TEXT[command_prefix])
         return NO_ARG_COMMAND_TEXT[command_prefix]
+    if command_prefix in FIXED_PLAN_TEXT:
+        return FIXED_PLAN_TEXT[command_prefix].get(locale, FIXED_PLAN_TEXT[command_prefix]["zh-CN"])
     if locale == "en-US":
         structured_display = _render_structured_en_display(command)
         if structured_display is not None:
