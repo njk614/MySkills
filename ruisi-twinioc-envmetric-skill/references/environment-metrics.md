@@ -29,8 +29,8 @@ Normalize region names to the documented area buckets when reporting results:
 - 主场
 - 小会议室
 - 大会议室
-- 会议室
 - 机房
+- 整层
 
 ## Validity and Time Rules
 
@@ -77,15 +77,18 @@ Normalize region names to the documented area buckets when reporting results:
 | light_compliance_rate        | 光照达标率       | %     | Light seconds within 300-500 lux divided by monitored seconds      |
 | light_uniformity_1h          | 光照均匀度       | ratio | Average of rolling 1-hour uniformity values                        |
 
-## L2 Design-Only Metrics
+## Area-Level L2 And L1 Metric Codes
 
-The following are designed but not yet stored as actual database records:
+The following metrics are now available for queries:
 
-- thermal_comfort
-- humidity_comfort
-- air_quality_comfort
-- acoustic_comfort
-- lighting_comfort
+| metric_level | metric_code           | metric_name | unit  | area scope     |
+| ------------ | --------------------- | ----------- | ----- | -------------- |
+| L2           | thermal_comfort       | 热舒适      | score | 区域级、整层级 |
+| L2           | humidity_comfort      | 湿度舒适    | score | 区域级、整层级 |
+| L2           | air_quality_comfort   | 空气质量    | score | 区域级、整层级 |
+| L2           | acoustic_comfort      | 声舒适      | score | 区域级、整层级 |
+| L2           | lighting_comfort      | 光照舒适    | score | 区域级、整层级 |
+| L1           | environmental_comfort | 环境舒适    | score | 区域级、整层级 |
 
 ## Thresholds
 
@@ -124,7 +127,7 @@ When answering user requests, prefer this order:
 
 ### API Endpoints Structure
 
-All endpoints are REST GET endpoints with base URL `http://172.16.1.29:18081`
+All endpoints are REST GET endpoints. Default to base URL `http://172.16.1.29:18081`. If the service is deployed to a different reachable host, override the address with the actual environment value.
 
 #### Meta Endpoints
 
@@ -134,6 +137,7 @@ GET /api/v1/env/meta/metrics
 
 GET /api/v1/env/meta/areas
   Returns: {items: [{floor_no, area_name}, ...]}
+  Note: the list includes 区域级 areas and the virtual aggregated area 整层
 ```
 
 #### Temperature Sensor Endpoints
@@ -149,14 +153,15 @@ GET /api/v1/env/temperature/sensors/{sensor_id}
 #### Area Metrics Endpoints
 
 ```
-GET /api/v1/env/areas/{area_name}/metrics/latest?metric_level=L3&floor_no=20
-  Returns: {area_name, floor_no, stat_time, items: [{metric_code, metric_name, metric_value, unit, stat_time}, ...]}
+GET /api/v1/env/areas/{area_name}/metrics/latest?metric_level={L3|L2|L1}&floor_no=20
+  Returns: {area_name, floor_no, stat_time, items: [{metric_code, metric_name, metric_value, unit, stat_time, window_start, window_end, online_rate, sensor_count, online_sensor_count, valid_flag}, ...]}
 
-GET /api/v1/env/areas/{area_name}/metrics/{metric_code}/latest?metric_level=L3&floor_no=20
-  Returns: {metric_code, metric_name, metric_value, unit, stat_time}
+GET /api/v1/env/areas/{area_name}/metrics/{metric_code}/latest?metric_level={L3|L2|L1}&floor_no=20
+  Returns: {metric_code, metric_name, metric_value, unit, stat_time, window_start, window_end, online_rate, sensor_count, online_sensor_count, valid_flag}
 
-GET /api/v1/env/areas/{area_name}/metrics/{metric_code}/timeline?granularity={hourly|daily|weekly}&metric_level=L3&floor_no=20&limit=24
-  Returns: {area_name, metric_code, granularity, items: [{stat_time, metric_value}, ...]}
+GET /api/v1/env/areas/{area_name}/metrics/{metric_code}/timeline?granularity={hourly|daily|weekly}&metric_level={L3|L2|L1}&floor_no=20&limit=24
+  Returns: {area_name, metric_code, granularity, items: [{stat_time|stat_date|stat_week, metric_value, metric_unit, window_start?, window_end?, week_start_date?, week_end_date?}, ...]}
+  Note: 整层 only supports L2/L1; 整层 + L3 returns 404
 ```
 
 ### Common Query Patterns

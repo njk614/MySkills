@@ -27,7 +27,7 @@ MAX_HISTORY_ITEMS = 20
 _SKILLS_ROOT = Path(__file__).resolve().parent.parent.parent
 STATE_FILE = _SKILLS_ROOT / "ruisi-twinioc-dataquery-skill" / ".runtime" / "session_store.json"
 JSON_RPC_ID_COUNTER = count(1)
-BACKGROUND_SEND_DELAY_SECONDS = float(os.getenv("SEND_INSTRUCTION_DELAY_SECONDS", "2"))
+BACKGROUND_SEND_DELAY_SECONDS = float(os.getenv("SEND_INSTRUCTION_DELAY_SECONDS", "0"))
 ENTITY_ALIAS_FILE = _SKILLS_ROOT / "ruisi-twinioc-dataquery-skill" / "entity_aliases.json"
 
 

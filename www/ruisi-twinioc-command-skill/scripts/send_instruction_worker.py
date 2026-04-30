@@ -10,7 +10,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Background sender for TwinEasy SendInstruction")
     parser.add_argument("--token", required=True)
     parser.add_argument("--json-data", required=True)
-    parser.add_argument("--delay-seconds", type=float, default=1.0)
+    parser.add_argument("--delay-seconds", type=float, default=0.0)
     parser.add_argument("--timeout-seconds", type=float, default=120.0)
     parser.add_argument("--server-url", required=True)
     return parser.parse_args()

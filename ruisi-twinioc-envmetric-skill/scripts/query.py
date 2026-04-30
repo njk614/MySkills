@@ -12,6 +12,8 @@ DEFAULT_BASE_URL = os.getenv("TWINIOC_ENVMETRIC_BASE_URL", "http://172.16.1.29:1
 DEFAULT_TIMEOUT_SECONDS = 15.0
 DEFAULT_METRIC_LEVEL = "L3"
 DEFAULT_FLOOR_NO = 20
+VALID_METRIC_LEVELS = ("L3", "L2", "L1")
+MAX_TIMELINE_LIMIT = 500
 
 
 def _build_url(base_url: str, path: str, query_params: dict[str, Any] | None = None) -> str:
@@ -80,6 +82,17 @@ def _handle_failure(command: str, url: str, exc: Exception) -> int:
     return 1
 
 
+def _handle_local_error(command: str, message: str) -> int:
+    _print_json(
+        {
+            "success": False,
+            "command": command,
+            "error": message,
+        }
+    )
+    return 1
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Query ruisi-twinioc environment metrics REST API")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="环境指标 REST API 基础地址")
@@ -98,13 +111,25 @@ def _parse_args() -> argparse.Namespace:
 
     latest_parser = subparsers.add_parser("area-latest", help="查询区域全部最新环境指标")
     latest_parser.add_argument("--area-name", required=True, help="区域名称，例如 主场")
-    latest_parser.add_argument("--metric-level", default=DEFAULT_METRIC_LEVEL, help="指标层级，默认 L3")
+    latest_parser.add_argument(
+        "--metric-level",
+        type=str.upper,
+        choices=VALID_METRIC_LEVELS,
+        default=DEFAULT_METRIC_LEVEL,
+        help="指标层级，可选 L3/L2/L1，默认 L3",
+    )
     latest_parser.add_argument("--floor-no", type=int, default=DEFAULT_FLOOR_NO, help="楼层编号，默认 20")
 
     metric_latest_parser = subparsers.add_parser("area-metric-latest", help="查询区域单个指标最新值")
     metric_latest_parser.add_argument("--area-name", required=True, help="区域名称，例如 主场")
     metric_latest_parser.add_argument("--metric-code", required=True, help="指标代码，例如 temperature_compliance_rate")
-    metric_latest_parser.add_argument("--metric-level", default=DEFAULT_METRIC_LEVEL, help="指标层级，默认 L3")
+    metric_latest_parser.add_argument(
+        "--metric-level",
+        type=str.upper,
+        choices=VALID_METRIC_LEVELS,
+        default=DEFAULT_METRIC_LEVEL,
+        help="指标层级，可选 L3/L2/L1，默认 L3",
+    )
     metric_latest_parser.add_argument("--floor-no", type=int, default=DEFAULT_FLOOR_NO, help="楼层编号，默认 20")
 
     timeline_parser = subparsers.add_parser("area-metric-timeline", help="查询区域单个指标趋势")
@@ -112,15 +137,37 @@ def _parse_args() -> argparse.Namespace:
     timeline_parser.add_argument("--metric-code", required=True, help="指标代码，例如 temperature_compliance_rate")
     timeline_parser.add_argument("--granularity", required=True, choices=("hourly", "daily", "weekly"), help="趋势粒度")
     timeline_parser.add_argument("--limit", type=int, default=24, help="返回数据点数量")
-    timeline_parser.add_argument("--metric-level", default=DEFAULT_METRIC_LEVEL, help="指标层级，默认 L3")
+    timeline_parser.add_argument(
+        "--metric-level",
+        type=str.upper,
+        choices=VALID_METRIC_LEVELS,
+        default=DEFAULT_METRIC_LEVEL,
+        help="指标层级，可选 L3/L2/L1，默认 L3",
+    )
     timeline_parser.add_argument("--floor-no", type=int, default=DEFAULT_FLOOR_NO, help="楼层编号，默认 20")
 
     return parser.parse_args()
 
 
+def _validate_args(args: argparse.Namespace) -> str | None:
+    command = str(args.command)
+
+    if command in {"area-latest", "area-metric-latest", "area-metric-timeline"}:
+        if args.area_name == "整层" and args.metric_level == "L3":
+            return "整层仅支持 L2/L1 指标查询，不能使用 L3。"
+
+    if command == "area-metric-timeline" and not 1 <= int(args.limit) <= MAX_TIMELINE_LIMIT:
+        return f"limit 必须在 1 到 {MAX_TIMELINE_LIMIT} 之间。"
+
+    return None
+
+
 def main() -> int:
     args = _parse_args()
     command = str(args.command)
+    validation_error = _validate_args(args)
+    if validation_error:
+        return _handle_local_error(command, validation_error)
 
     if command == "metrics-meta":
         url = _build_url(args.base_url, "/api/v1/env/meta/metrics")
