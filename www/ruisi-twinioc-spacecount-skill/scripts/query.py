@@ -6,7 +6,7 @@ import asyncio
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -163,6 +163,19 @@ EN_VALUE_ALIASES: dict[str, str] = {
     "cancelled": "Canceled",
 }
 
+STATISTICS_WINDOW_START = time(hour=9, minute=30)
+STATISTICS_WINDOW_END = time(hour=18, minute=30)
+
+OUTSIDE_STATISTICS_WINDOW_TIPS: dict[str, str] = {
+    "zh-CN": "数据生成统计时间是9:30-18:30，未在统计时间范围内，建议您先查询昨天或之前的数据！",
+    "en-US": "Statistics are generated from 9:30 to 18:30. The requested time is outside that range. Please query yesterday or earlier data first.",
+}
+
+NO_DATA_TIPS: dict[str, str] = {
+    "zh-CN": "建议检查统计数据或查询其他范围内的数据！",
+    "en-US": "Please check the statistics or query another time range.",
+}
+
 
 def _parse_json_arg(value: str) -> dict[str, Any]:
     parsed = json.loads(value or "{}")
@@ -235,6 +248,124 @@ def _set_default(payload: dict[str, Any], key: str, value: Any) -> None:
 
 def _format_dt(value: datetime) -> str:
     return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _parse_datetime_text(value: Any) -> datetime | None:
+    text = _string_value(value)
+    if not text:
+        return None
+    for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, pattern)
+        except ValueError:
+            continue
+    return None
+
+
+def _is_time_in_statistics_window(dt_value: datetime) -> bool:
+    current_time = dt_value.time()
+    return STATISTICS_WINDOW_START <= current_time <= STATISTICS_WINDOW_END
+
+
+def _query_outside_statistics_window(mcp_args: dict[str, Any]) -> bool:
+    start_dt = _parse_datetime_text(mcp_args.get("startTime"))
+    end_dt = _parse_datetime_text(mcp_args.get("endTime"))
+    if start_dt is None and end_dt is None:
+        return False
+
+    if start_dt is None:
+        return not _is_time_in_statistics_window(end_dt)
+    if end_dt is None:
+        return not _is_time_in_statistics_window(start_dt)
+
+    if end_dt < start_dt:
+        start_dt, end_dt = end_dt, start_dt
+
+    current_day = start_dt.date()
+    last_day = end_dt.date()
+    while current_day <= last_day:
+        window_start = datetime.combine(current_day, STATISTICS_WINDOW_START)
+        window_end = datetime.combine(current_day, STATISTICS_WINDOW_END)
+        if start_dt <= window_end and end_dt >= window_start:
+            return False
+        current_day += timedelta(days=1)
+
+    return True
+
+
+def _extract_space_utilization_rows(result: dict[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for field_name in ("RegionData", "FloorData"):
+        field_value = result.get(field_name)
+        if isinstance(field_value, list):
+            rows.extend(item for item in field_value if isinstance(item, dict))
+    return rows
+
+
+def _indicators_all_zero_or_missing(result: dict[str, Any]) -> bool:
+    rows = _extract_space_utilization_rows(result)
+    if not rows:
+        return True
+
+    has_numeric_indicator = False
+    for row in rows:
+        indicators = row.get("Indicators")
+        if not isinstance(indicators, dict) or not indicators:
+            continue
+        for indicator_value in indicators.values():
+            if isinstance(indicator_value, bool):
+                continue
+            if isinstance(indicator_value, (int, float)):
+                has_numeric_indicator = True
+                if float(indicator_value) != 0:
+                    return False
+    return True if has_numeric_indicator or rows else True
+
+
+def _append_result_tip(result: dict[str, Any], tip_text: str) -> None:
+    if not tip_text:
+        return
+
+    tips = result.get("Tips")
+    if isinstance(tips, list):
+        if tip_text not in tips:
+            tips.append(tip_text)
+    elif tips is None:
+        result["Tips"] = [tip_text]
+    else:
+        existing_text = _string_value(tips)
+        if existing_text and existing_text != tip_text:
+            result["Tips"] = [existing_text, tip_text]
+        elif existing_text:
+            result["Tips"] = [existing_text]
+        else:
+            result["Tips"] = [tip_text]
+
+
+def _maybe_annotate_space_utilization_result(
+    tool_name: str,
+    result: Any,
+    mcp_args: dict[str, Any],
+    locale: str,
+) -> Any:
+    if tool_name != "get_space_utilization_index_data" or not isinstance(result, dict):
+        return result
+
+    no_data = _indicators_all_zero_or_missing(result)
+    if no_data:
+        _append_result_tip(result, NO_DATA_TIPS.get(locale) or NO_DATA_TIPS["zh-CN"])
+
+    return result
+
+
+def _build_outside_statistics_window_result(locale: str) -> dict[str, Any]:
+    tip_text = OUTSIDE_STATISTICS_WINDOW_TIPS.get(locale) or OUTSIDE_STATISTICS_WINDOW_TIPS["zh-CN"]
+    return {
+        "Message": tip_text,
+        "Tips": [tip_text],
+        "RegionData": [],
+        "FloorData": [],
+    }
 
 
 def _current_time_context() -> tuple[str, str, str]:
@@ -529,12 +660,17 @@ async def _run_async(args: argparse.Namespace) -> int:
         print(json.dumps({"success": False, "error": validation_error}, ensure_ascii=False, indent=2))
         return 1
 
+    if tool_name == "get_space_utilization_index_data" and _query_outside_statistics_window(mcp_args):
+        print(json.dumps(_build_outside_statistics_window_result(locale), ensure_ascii=False, indent=2))
+        return 0
+
     try:
         result = await call_mcp_tool(args.token, tool_name, mcp_args, base_url=args.base_url)
     except SkillRuntimeError as exc:
         print(json.dumps({"success": False, "error": str(exc)}, ensure_ascii=False, indent=2))
         return 1
 
+    result = _maybe_annotate_space_utilization_result(tool_name, result, mcp_args, locale)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
