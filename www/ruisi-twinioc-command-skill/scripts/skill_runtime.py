@@ -154,6 +154,8 @@ PLAN_MESSAGES: dict[str, dict[str, str]] = {
 }
 
 EN_TEXT_REPLACEMENTS: list[tuple[str, str]] = [
+    ("CSI通感", "CSI sensing"),
+    ("防偷拍监测", "Hidden camera detection"),
     ("告警信息选中", "Select alarm info"),
     ("打开温控器", "Turn on the air conditioner"),
     ("关闭温控器", "Turn off the air conditioner"),
@@ -392,7 +394,7 @@ def _build_entity_display_replacements(entries: list[dict[str, Any]]) -> list[tu
 DIRECT_INFO_PREFIXES: set[str] = {
     "A01", "A02", "A07", "A08", "A10", "A11", "A12", "A15", "A16", "A17", "A18",
     "A19", "A22", "A23", "A24", "A25", "A26", "A27", "A28", "A29", "A39",
-    "B01", "B02", "B06", "B07", "B08", "B09", "B10", "B13", "B14", "C01", "C02",
+    "B01", "B02", "B06", "B07", "B08", "B09", "B10", "B13", "B14", "B15", "B16", "C01", "C02",
     "E01", "E02", "E03", "E04", "E07",
     "E12", "E13", "E14", "E15", "E16",
     "E21", "E24", "E25", "E26", "E27",
